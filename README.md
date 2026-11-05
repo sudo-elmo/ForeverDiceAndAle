@@ -68,6 +68,10 @@ There is no extra server. The addon sends small hidden addon messages over your 
 
 The active player rolls on their own computer. The other clients only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
 
+## Made with AI
+
+In the spirit of transparency: this addon was built with the help of AI. The code, the texts and the logo were created together with Claude (Anthropic), guided, reviewed and tested by me. If you find a bug, please open an issue – I'll take care of it.
+
 ## License
 
 MIT – see [LICENSE](LICENSE).
