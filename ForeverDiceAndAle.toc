@@ -1,0 +1,20 @@
+## Interface: 16001
+## Title: Forever Dice & Ale
+## Notes: A round of dice, a round of ale – the classic five-dice game, solo or with your party or raid.
+## Notes-deDE: Eine Runde Würfel, eine Runde Bier – das klassische Würfelspiel mit fünf Würfeln, solo oder mit deiner Gruppe.
+## Author: sudo-elmo
+## Version: @project-version@
+## IconTexture: Interface\AddOns\ForeverDiceAndAle\Icon
+## SavedVariables: ForeverDiceAndAleDB
+## X-License: MIT
+## Category: Minigames
+## AddonCompartmentFunc: ForeverDiceAndAle_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: ForeverDiceAndAle_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: ForeverDiceAndAle_OnAddonCompartmentLeave
+
+Locales.lua
+Rules.lua
+Game.lua
+Net.lua
+UI.lua
+Core.lua

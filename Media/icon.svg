@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0" stop-color="#5a3517"/>
+      <stop offset="0.55" stop-color="#2e1a0b"/>
+      <stop offset="1" stop-color="#120804"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0a8"/>
+      <stop offset="0.3" stop-color="#e2b04a"/>
+      <stop offset="0.55" stop-color="#8f5e16"/>
+      <stop offset="0.8" stop-color="#f1c45a"/>
+      <stop offset="1" stop-color="#7a4c10"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f2e12"/>
+      <stop offset="0.25" stop-color="#9a6431"/>
+      <stop offset="0.45" stop-color="#c38a4c"/>
+      <stop offset="0.7" stop-color="#8a5627"/>
+      <stop offset="1" stop-color="#3f230c"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3d27a"/>
+      <stop offset="0.5" stop-color="#a37425"/>
+      <stop offset="1" stop-color="#5c3b0c"/>
+    </linearGradient>
+    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf4"/>
+      <stop offset="1" stop-color="#e9dcc0"/>
+    </linearGradient>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.6" stop-color="#efe3c8"/>
+      <stop offset="1" stop-color="#c9b48c"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9c1f14"/>
+      <stop offset="1" stop-color="#5a0d07"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="4" dy="7"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.6"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="frameClip"><rect x="22" y="22" width="468" height="468" rx="58"/></clipPath>
+  </defs>
+
+  <!-- background with faint wooden planks -->
+  <rect x="22" y="22" width="468" height="468" rx="58" fill="url(#bg)"/>
+  <g clip-path="url(#frameClip)" stroke="#000" stroke-opacity="0.22" stroke-width="3">
+    <line x1="0" y1="118" x2="512" y2="118"/>
+    <line x1="0" y1="214" x2="512" y2="214"/>
+    <line x1="0" y1="310" x2="512" y2="310"/>
+    <line x1="0" y1="406" x2="512" y2="406"/>
+  </g>
+  <circle cx="250" cy="250" r="190" fill="url(#glow)"/>
+
+  <g transform="translate(0 34)">
+  <!-- tankard -->
+  <g filter="url(#shadow)">
+    <!-- handle -->
+    <path d="M318 196 C 410 190, 420 330, 318 334" fill="none" stroke="#3f230c" stroke-width="40" stroke-linecap="round"/>
+    <path d="M318 196 C 400 192, 408 328, 318 334" fill="none" stroke="url(#wood)" stroke-width="26" stroke-linecap="round"/>
+    <!-- body -->
+    <path d="M150 150 L330 150 L322 372 Q 240 392 158 372 Z" fill="url(#wood)" stroke="#2b1606" stroke-width="5"/>
+    <g stroke="#3a2008" stroke-opacity="0.55" stroke-width="3">
+      <line x1="186" y1="152" x2="190" y2="378"/>
+      <line x1="222" y1="152" x2="224" y2="384"/>
+      <line x1="258" y1="152" x2="257" y2="384"/>
+      <line x1="294" y1="152" x2="290" y2="378"/>
+    </g>
+    <!-- metal bands -->
+    <path d="M149 178 L331 178 L330 204 L150 204 Z" fill="url(#band)" stroke="#3b2606" stroke-width="3"/>
+    <path d="M155 326 L326 326 L324 352 Q 240 366 157 352 Z" fill="url(#band)" stroke="#3b2606" stroke-width="3"/>
+    <!-- foam: outline layer below, fill layer on top, so the bubbles merge into one head -->
+    <g fill="#b9a47c">
+      <circle cx="160" cy="146" r="29"/><circle cx="198" cy="128" r="35"/><circle cx="244" cy="120" r="37"/>
+      <circle cx="288" cy="130" r="33"/><circle cx="322" cy="148" r="27"/>
+      <path d="M150 156 C 147 186, 152 202, 164 202 C 177 202, 180 186, 177 156 Z"/>
+      <path d="M296 158 C 294 180, 298 192, 308 192 C 318 192, 321 180, 319 158 Z"/>
+    </g>
+    <g fill="url(#foam)">
+      <circle cx="160" cy="146" r="26"/><circle cx="198" cy="128" r="32"/><circle cx="244" cy="120" r="34"/>
+      <circle cx="288" cy="130" r="30"/><circle cx="322" cy="148" r="24"/>
+      <rect x="160" y="140" width="160" height="20"/>
+      <path d="M153 156 C 150 184, 155 199, 164 199 C 174 199, 177 184, 174 156 Z"/>
+      <path d="M299 158 C 297 178, 301 189, 308 189 C 315 189, 318 178, 316 158 Z"/>
+    </g>
+    <g fill="#ffffff" opacity="0.8">
+      <circle cx="226" cy="108" r="9"/>
+      <circle cx="186" cy="120" r="6"/>
+    </g>
+  </g>
+
+  <!-- dice -->
+  <g filter="url(#shadow)">
+    <g transform="translate(200 326) rotate(-16)">
+      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="url(#ivory)" stroke="#5a4020" stroke-width="4"/>
+      <g fill="#6e130c">
+        <circle cx="-28" cy="-28" r="10"/><circle cx="28" cy="-28" r="10"/>
+        <circle cx="0" cy="0" r="10"/>
+        <circle cx="-28" cy="28" r="10"/><circle cx="28" cy="28" r="10"/>
+      </g>
+    </g>
+    <g transform="translate(326 340) rotate(14)">
+      <rect x="-50" y="-50" width="100" height="100" rx="16" fill="url(#ivory)" stroke="#5a4020" stroke-width="4"/>
+      <g fill="#6e130c">
+        <circle cx="-24" cy="-26" r="9"/><circle cx="24" cy="-26" r="9"/>
+        <circle cx="-24" cy="0" r="9"/><circle cx="24" cy="0" r="9"/>
+        <circle cx="-24" cy="26" r="9"/><circle cx="24" cy="26" r="9"/>
+      </g>
+    </g>
+  </g>
+
+  </g>
+
+  <!-- gold frame -->
+  <rect x="22" y="22" width="468" height="468" rx="58" fill="none" stroke="url(#gold)" stroke-width="18"/>
+  <rect x="35" y="35" width="442" height="442" rx="48" fill="none" stroke="#1a0d03" stroke-width="3" stroke-opacity="0.8"/>
+</svg>

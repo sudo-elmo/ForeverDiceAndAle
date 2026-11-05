@@ -1,0 +1,38 @@
+---
+name: Release
+
+# Runs when a version tag like v1.0.0 is pushed.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Builds the zip, uploads it to CurseForge (needs X-Curse-Project-ID in the .toc
+      # and the CF_API_KEY secret) and creates a GitHub release.
+      - uses: BigWigsMods/packager@v2
+
+      # The packager posts the whole CHANGELOG.md; the GitHub release only gets this version's section.
+      - name: Trim GitHub release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## /{f = ($2 == v); next} f' CHANGELOG.md | sed '/./,$!d' > notes.md
+          test -s notes.md || { echo "No CHANGELOG.md section for ${GITHUB_REF_NAME#v}"; exit 1; }
+          gh release edit "$GITHUB_REF_NAME" --notes-file notes.md

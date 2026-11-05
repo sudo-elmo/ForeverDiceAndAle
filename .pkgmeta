@@ -1,0 +1,14 @@
+---
+package-as: ForeverDiceAndAle
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .gitignore
+  - .github
+  - .pkgmeta
+  - Media
+  - tests
+  - dist
