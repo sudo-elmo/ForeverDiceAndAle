@@ -1,125 +1,223 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
-      <stop offset="0" stop-color="#5a3517"/>
-      <stop offset="0.55" stop-color="#2e1a0b"/>
-      <stop offset="1" stop-color="#120804"/>
+    <!-- scene -->
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#24140a"/>
+      <stop offset="1" stop-color="#3b2312"/>
+    </linearGradient>
+    <linearGradient id="table" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a5428"/>
+      <stop offset="0.25" stop-color="#6e4019"/>
+      <stop offset="1" stop-color="#3c210c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.47" cy="0.45" r="0.5">
+      <stop offset="0" stop-color="#ffbf5e" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#ff9a2e" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#ffb347" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
+    <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.62">
+      <stop offset="0.6" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.65"/>
     </radialGradient>
+
+    <!-- frame -->
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fff0a8"/>
-      <stop offset="0.3" stop-color="#e2b04a"/>
-      <stop offset="0.55" stop-color="#8f5e16"/>
-      <stop offset="0.8" stop-color="#f1c45a"/>
-      <stop offset="1" stop-color="#7a4c10"/>
+      <stop offset="0" stop-color="#fff2b0"/>
+      <stop offset="0.22" stop-color="#e6b54e"/>
+      <stop offset="0.5" stop-color="#8e5c14"/>
+      <stop offset="0.75" stop-color="#f3c85c"/>
+      <stop offset="1" stop-color="#6e430d"/>
     </linearGradient>
-    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#4f2e12"/>
-      <stop offset="0.25" stop-color="#9a6431"/>
-      <stop offset="0.45" stop-color="#c38a4c"/>
-      <stop offset="0.7" stop-color="#8a5627"/>
-      <stop offset="1" stop-color="#3f230c"/>
+
+    <!-- tankard -->
+    <linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity="0.62"/>
+      <stop offset="0.18" stop-color="#000" stop-opacity="0.15"/>
+      <stop offset="0.36" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.52" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.82" stop-color="#000" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.7"/>
     </linearGradient>
-    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f3d27a"/>
-      <stop offset="0.5" stop-color="#a37425"/>
-      <stop offset="1" stop-color="#5c3b0c"/>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbe39a"/>
+      <stop offset="0.45" stop-color="#c8902f"/>
+      <stop offset="1" stop-color="#6a420f"/>
     </linearGradient>
-    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fffdf4"/>
-      <stop offset="1" stop-color="#e9dcc0"/>
+    <linearGradient id="handleWood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5a3313"/>
+      <stop offset="0.5" stop-color="#9a5f2a"/>
+      <stop offset="1" stop-color="#4a290d"/>
     </linearGradient>
-    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+    <clipPath id="bodyClip">
+      <path d="M148 176 L322 176 L329 382 Q 235 398 141 382 Z"/>
+    </clipPath>
+
+    <!-- dice -->
+    <linearGradient id="ivoryFront" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#fffaf0"/>
-      <stop offset="0.6" stop-color="#efe3c8"/>
-      <stop offset="1" stop-color="#c9b48c"/>
+      <stop offset="1" stop-color="#e6d6b3"/>
     </linearGradient>
+    <linearGradient id="ivoryTop" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#fffdf7"/>
+      <stop offset="1" stop-color="#f3e8cf"/>
+    </linearGradient>
+    <linearGradient id="ivorySide" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#cdb98f"/>
+      <stop offset="1" stop-color="#a48c62"/>
+    </linearGradient>
+
+    <!-- ribbon -->
     <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#9c1f14"/>
-      <stop offset="1" stop-color="#5a0d07"/>
+      <stop offset="0" stop-color="#b3291b"/>
+      <stop offset="0.55" stop-color="#7c140b"/>
+      <stop offset="1" stop-color="#4f0904"/>
     </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
-      <feOffset dx="4" dy="7"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.6"/></feComponentTransfer>
+
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="4"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.55"/></feComponentTransfer>
       <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <clipPath id="frameClip"><rect x="22" y="22" width="468" height="468" rx="58"/></clipPath>
+    <clipPath id="frameClip"><rect x="24" y="24" width="464" height="464" rx="56"/></clipPath>
   </defs>
 
-  <!-- background with faint wooden planks -->
-  <rect x="22" y="22" width="468" height="468" rx="58" fill="url(#bg)"/>
-  <g clip-path="url(#frameClip)" stroke="#000" stroke-opacity="0.22" stroke-width="3">
-    <line x1="0" y1="118" x2="512" y2="118"/>
-    <line x1="0" y1="214" x2="512" y2="214"/>
-    <line x1="0" y1="310" x2="512" y2="310"/>
-    <line x1="0" y1="406" x2="512" y2="406"/>
-  </g>
-  <circle cx="250" cy="250" r="190" fill="url(#glow)"/>
+  <!-- ================= scene ================= -->
+  <g clip-path="url(#frameClip)">
+    <rect x="0" y="0" width="512" height="512" fill="url(#wall)"/>
+    <!-- wall planks -->
+    <g stroke="#000" stroke-opacity="0.28" stroke-width="3">
+      <line x1="110" y1="0" x2="110" y2="360"/>
+      <line x1="210" y1="0" x2="210" y2="360"/>
+      <line x1="310" y1="0" x2="310" y2="360"/>
+      <line x1="410" y1="0" x2="410" y2="360"/>
+    </g>
+    <circle cx="240" cy="230" r="230" fill="url(#glow)"/>
 
-  <g transform="translate(0 34)">
-  <!-- tankard -->
-  <g filter="url(#shadow)">
-    <!-- handle -->
-    <path d="M318 196 C 410 190, 420 330, 318 334" fill="none" stroke="#3f230c" stroke-width="40" stroke-linecap="round"/>
-    <path d="M318 196 C 400 192, 408 328, 318 334" fill="none" stroke="url(#wood)" stroke-width="26" stroke-linecap="round"/>
-    <!-- body -->
-    <path d="M150 150 L330 150 L322 372 Q 240 392 158 372 Z" fill="url(#wood)" stroke="#2b1606" stroke-width="5"/>
-    <g stroke="#3a2008" stroke-opacity="0.55" stroke-width="3">
-      <line x1="186" y1="152" x2="190" y2="378"/>
-      <line x1="222" y1="152" x2="224" y2="384"/>
-      <line x1="258" y1="152" x2="257" y2="384"/>
-      <line x1="294" y1="152" x2="290" y2="378"/>
-    </g>
-    <!-- metal bands -->
-    <path d="M149 178 L331 178 L330 204 L150 204 Z" fill="url(#band)" stroke="#3b2606" stroke-width="3"/>
-    <path d="M155 326 L326 326 L324 352 Q 240 366 157 352 Z" fill="url(#band)" stroke="#3b2606" stroke-width="3"/>
-    <!-- foam: outline layer below, fill layer on top, so the bubbles merge into one head -->
-    <g fill="#b9a47c">
-      <circle cx="160" cy="146" r="29"/><circle cx="198" cy="128" r="35"/><circle cx="244" cy="120" r="37"/>
-      <circle cx="288" cy="130" r="33"/><circle cx="322" cy="148" r="27"/>
-      <path d="M150 156 C 147 186, 152 202, 164 202 C 177 202, 180 186, 177 156 Z"/>
-      <path d="M296 158 C 294 180, 298 192, 308 192 C 318 192, 321 180, 319 158 Z"/>
-    </g>
-    <g fill="url(#foam)">
-      <circle cx="160" cy="146" r="26"/><circle cx="198" cy="128" r="32"/><circle cx="244" cy="120" r="34"/>
-      <circle cx="288" cy="130" r="30"/><circle cx="322" cy="148" r="24"/>
-      <rect x="160" y="140" width="160" height="20"/>
-      <path d="M153 156 C 150 184, 155 199, 164 199 C 174 199, 177 184, 174 156 Z"/>
-      <path d="M299 158 C 297 178, 301 189, 308 189 C 315 189, 318 178, 316 158 Z"/>
-    </g>
-    <g fill="#ffffff" opacity="0.8">
-      <circle cx="226" cy="108" r="9"/>
-      <circle cx="186" cy="120" r="6"/>
+    <!-- table top -->
+    <rect x="0" y="356" width="512" height="160" fill="url(#table)"/>
+    <rect x="0" y="352" width="512" height="8" fill="#a8703a"/>
+    <rect x="0" y="360" width="512" height="3" fill="#2a1606" opacity="0.6"/>
+    <g stroke="#2a1606" stroke-opacity="0.45" stroke-width="2">
+      <line x1="0" y1="398" x2="512" y2="398"/>
+      <line x1="0" y1="446" x2="512" y2="446"/>
     </g>
   </g>
 
-  <!-- dice -->
-  <g filter="url(#shadow)">
-    <g transform="translate(200 326) rotate(-16)">
-      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="url(#ivory)" stroke="#5a4020" stroke-width="4"/>
-      <g fill="#6e130c">
-        <circle cx="-28" cy="-28" r="10"/><circle cx="28" cy="-28" r="10"/>
-        <circle cx="0" cy="0" r="10"/>
-        <circle cx="-28" cy="28" r="10"/><circle cx="28" cy="28" r="10"/>
-      </g>
+  <g transform="translate(0 30)">
+  <!-- ================= tankard ================= -->
+  <!-- shadow on table -->
+  <ellipse cx="248" cy="388" rx="120" ry="16" fill="#000" opacity="0.55" filter="url(#soft)"/>
+
+  <!-- handle (behind body) -->
+  <path d="M318 214 C 404 206, 410 350, 320 346" fill="none" stroke="#2b1604" stroke-width="40" stroke-linecap="round"/>
+  <path d="M318 214 C 398 208, 402 348, 320 346" fill="none" stroke="url(#handleWood)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M330 222 C 386 222, 388 334, 332 336" fill="none" stroke="#c48a4c" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round"/>
+  <rect x="368" y="238" width="22" height="12" rx="3" fill="url(#brass)" stroke="#3a2406" stroke-width="2" transform="rotate(-28 379 244)"/>
+  <rect x="370" y="306" width="22" height="12" rx="3" fill="url(#brass)" stroke="#3a2406" stroke-width="2" transform="rotate(30 381 312)"/>
+
+  <!-- body -->
+  <g clip-path="url(#bodyClip)">
+    <rect x="130" y="160" width="210" height="250" fill="#a2652d"/>
+    <!-- staves with slightly different tones -->
+    <path d="M148 160 L183 160 L180 400 L141 400 Z" fill="#94592a"/>
+    <path d="M218 160 L253 160 L253 400 L216 400 Z" fill="#ac6c31"/>
+    <path d="M288 160 L322 160 L329 400 L290 400 Z" fill="#9a5c29"/>
+    <!-- grain -->
+    <g stroke="#5a3311" stroke-opacity="0.35" stroke-width="1.5" fill="none">
+      <path d="M165 180 C 162 250, 168 300, 163 380"/>
+      <path d="M200 180 C 204 240, 197 310, 201 384"/>
+      <path d="M236 180 C 233 260, 239 320, 235 388"/>
+      <path d="M270 180 C 274 250, 268 300, 272 386"/>
+      <path d="M306 180 C 303 250, 309 320, 306 382"/>
     </g>
-    <g transform="translate(326 340) rotate(14)">
-      <rect x="-50" y="-50" width="100" height="100" rx="16" fill="url(#ivory)" stroke="#5a4020" stroke-width="4"/>
-      <g fill="#6e130c">
-        <circle cx="-24" cy="-26" r="9"/><circle cx="24" cy="-26" r="9"/>
-        <circle cx="-24" cy="0" r="9"/><circle cx="24" cy="0" r="9"/>
-        <circle cx="-24" cy="26" r="9"/><circle cx="24" cy="26" r="9"/>
-      </g>
+    <!-- stave joints -->
+    <g stroke="#3a1f08" stroke-opacity="0.75" stroke-width="2.5">
+      <line x1="183" y1="160" x2="180" y2="400"/>
+      <line x1="218" y1="160" x2="216" y2="400"/>
+      <line x1="253" y1="160" x2="253" y2="400"/>
+      <line x1="288" y1="160" x2="290" y2="400"/>
     </g>
+    <!-- roundness -->
+    <rect x="141" y="160" width="188" height="250" fill="url(#cyl)"/>
   </g>
+  <path d="M148 176 L322 176 L329 382 Q 235 398 141 382 Z" fill="none" stroke="#2b1604" stroke-width="4"/>
+
+  <!-- brass bands with rivets -->
+  <g stroke="#3a2406" stroke-width="2.5">
+    <path d="M146 204 Q 235 214 324 204 L325 228 Q 235 238 145 228 Z" fill="url(#brass)"/>
+    <path d="M143 334 Q 235 346 327 334 L328 358 Q 235 370 142 358 Z" fill="url(#brass)"/>
+  </g>
+  <g fill="#fff3c4" stroke="#5a3a0a" stroke-width="1.5">
+    <circle cx="172" cy="219" r="3.5"/><circle cx="214" cy="223" r="3.5"/><circle cx="256" cy="223" r="3.5"/><circle cx="298" cy="219" r="3.5"/>
+    <circle cx="170" cy="350" r="3.5"/><circle cx="214" cy="355" r="3.5"/><circle cx="256" cy="355" r="3.5"/><circle cx="300" cy="350" r="3.5"/>
+  </g>
+  <!-- band shading for roundness -->
+  <g clip-path="url(#bodyClip)">
+    <rect x="141" y="200" width="188" height="40" fill="url(#cyl)" opacity="0.8"/>
+    <rect x="141" y="330" width="188" height="44" fill="url(#cyl)" opacity="0.8"/>
+  </g>
+
+  <!-- ================= foam ================= -->
+  <!-- darker underside so the head has volume -->
+  <g fill="#cbb487">
+    <ellipse cx="235" cy="184" rx="96" ry="20"/>
+    <circle cx="160" cy="174" r="28"/><circle cx="198" cy="154" r="35"/><circle cx="243" cy="146" r="40"/>
+    <circle cx="288" cy="156" r="34"/><circle cx="318" cy="176" r="26"/>
+    <path d="M156 186 C 152 214, 156 236, 168 236 C 181 236, 184 214, 181 186 Z"/>
+    <path d="M292 190 C 290 210, 294 224, 304 224 C 314 224, 317 210, 315 190 Z"/>
+  </g>
+  <g fill="#fbf4e3">
+    <ellipse cx="235" cy="180" rx="93" ry="17"/>
+    <circle cx="160" cy="170" r="26"/><circle cx="198" cy="150" r="33"/><circle cx="243" cy="142" r="38"/>
+    <circle cx="288" cy="152" r="32"/><circle cx="318" cy="172" r="24"/>
+    <path d="M158 184 C 155 210, 158 230, 168 230 C 178 230, 181 210, 179 184 Z"/>
+    <path d="M294 188 C 292 206, 296 218, 304 218 C 312 218, 315 206, 313 188 Z"/>
+  </g>
+  <!-- highlights and bubbles -->
+  <g fill="#ffffff">
+    <ellipse cx="228" cy="124" rx="15" ry="8" transform="rotate(-18 228 124)"/>
+    <ellipse cx="186" cy="136" rx="9" ry="5" transform="rotate(-25 186 136)"/>
+    <ellipse cx="282" cy="136" rx="8" ry="4" transform="rotate(-15 282 136)"/>
+  </g>
+  <g fill="none" stroke="#d8c7a0" stroke-width="1.5">
+    <circle cx="210" cy="164" r="4"/><circle cx="252" cy="160" r="3"/><circle cx="298" cy="166" r="3.5"/>
+    <circle cx="174" cy="176" r="3"/><circle cx="236" cy="174" r="2.5"/>
+  </g>
+
+  <!-- ================= dice (3D) ================= -->
+  <ellipse cx="166" cy="404" rx="60" ry="10" fill="#000" opacity="0.6" filter="url(#soft)"/>
+  <ellipse cx="344" cy="406" rx="56" ry="9" fill="#000" opacity="0.6" filter="url(#soft)"/>
+  <!-- die A: front 5, top 3, side 2 -->
+  <g stroke="#5c4422" stroke-width="3" stroke-linejoin="round">
+    <path d="M110 316 L146 280 L232 280 L196 316 Z" fill="url(#ivoryTop)"/>
+    <path d="M196 316 L232 280 L232 366 L196 402 Z" fill="url(#ivorySide)"/>
+    <rect x="110" y="316" width="86" height="86" rx="10" fill="url(#ivoryFront)"/>
+  </g>
+  <g fill="#7a1410"><circle cx="131.5" cy="337.5" r="8"/><circle cx="174.5" cy="337.5" r="8"/><circle cx="153.0" cy="359.0" r="8"/><circle cx="131.5" cy="380.5" r="8"/><circle cx="174.5" cy="380.5" r="8"/></g>
+  <g fill="#7a1410" transform="matrix(1 0 0.4186 -0.4186 110 316)"><circle cx="21.5" cy="21.5" r="8"/><circle cx="43.0" cy="43.0" r="8"/><circle cx="64.5" cy="64.5" r="8"/></g>
+  <g fill="#5e0f0b" transform="matrix(0.4186 -0.4186 0 1 196 316)"><circle cx="21.5" cy="21.5" r="8"/><circle cx="64.5" cy="64.5" r="8"/></g>
+  <line x1="118" y1="317" x2="190" y2="317" stroke="#fff" stroke-opacity="0.8" stroke-width="2" stroke-linecap="round"/>
+  <!-- die B: front 6, top 1, side 4 -->
+  <g stroke="#5c4422" stroke-width="3" stroke-linejoin="round">
+    <path d="M296 326 L328 294 L406 294 L374 326 Z" fill="url(#ivoryTop)"/>
+    <path d="M374 326 L406 294 L406 372 L374 404 Z" fill="url(#ivorySide)"/>
+    <rect x="296" y="326" width="78" height="78" rx="10" fill="url(#ivoryFront)"/>
+  </g>
+  <g fill="#7a1410"><circle cx="315.5" cy="344.7" r="7.5"/><circle cx="354.5" cy="344.7" r="7.5"/><circle cx="315.5" cy="365.0" r="7.5"/><circle cx="354.5" cy="365.0" r="7.5"/><circle cx="315.5" cy="385.3" r="7.5"/><circle cx="354.5" cy="385.3" r="7.5"/></g>
+  <g fill="#7a1410" transform="matrix(1 0 0.4103 -0.4103 296 326)"><circle cx="39.0" cy="39.0" r="10"/></g>
+  <g fill="#5e0f0b" transform="matrix(0.4103 -0.4103 0 1 374 326)"><circle cx="19.5" cy="19.5" r="7"/><circle cx="58.5" cy="19.5" r="7"/><circle cx="19.5" cy="58.5" r="7"/><circle cx="58.5" cy="58.5" r="7"/></g>
+  <line x1="304" y1="327" x2="368" y2="327" stroke="#fff" stroke-opacity="0.8" stroke-width="2" stroke-linecap="round"/>
 
   </g>
 
-  <!-- gold frame -->
-  <rect x="22" y="22" width="468" height="468" rx="58" fill="none" stroke="url(#gold)" stroke-width="18"/>
-  <rect x="35" y="35" width="442" height="442" rx="48" fill="none" stroke="#1a0d03" stroke-width="3" stroke-opacity="0.8"/>
+  <!-- ================= frame ================= -->
+  <rect x="24" y="24" width="464" height="464" rx="56" fill="url(#vignette)"/>
+  <rect x="24" y="24" width="464" height="464" rx="56" fill="none" stroke="url(#gold)" stroke-width="18"/>
+  <rect x="15" y="15" width="482" height="482" rx="64" fill="none" stroke="#2a1504" stroke-width="2"/>
+  <rect x="34" y="34" width="444" height="444" rx="47" fill="none" stroke="#1a0c02" stroke-width="3"/>
+  <rect x="31" y="31" width="450" height="450" rx="50" fill="none" stroke="#fff1b8" stroke-opacity="0.35" stroke-width="1.5"/>
 </svg>
