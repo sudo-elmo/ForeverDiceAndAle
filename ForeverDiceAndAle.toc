@@ -7,6 +7,7 @@
 ## IconTexture: Interface\AddOns\ForeverDiceAndAle\Icon
 ## SavedVariables: ForeverDiceAndAleDB
 ## X-License: MIT
+## X-Curse-Project-ID: 1785905
 ## Category: Minigames
 ## AddonCompartmentFunc: ForeverDiceAndAle_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: ForeverDiceAndAle_OnAddonCompartmentEnter
