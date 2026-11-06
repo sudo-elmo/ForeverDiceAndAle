@@ -13,7 +13,7 @@
 --   HOLD|gid|turn|held           active : held dice changed
 --   SCORE|gid|turn|cat|dice      active : box chosen (receivers recompute points)
 --   LEAVE|gid                    any    : player left lobby / game
-local _, ns = ...
+local ADDON, ns = ...
 local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
@@ -30,30 +30,50 @@ local RegisterPrefix = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or
 
 -- ---------------------------------------------------------------- names
 
-function N.Normalize(name)
-    if not name or name == "" then return nil end
-    name = name:gsub("%s+", "")
-    if not name:find("-", 1, true) then
-        local realm = GetNormalizedRealmName and GetNormalizedRealmName()
-        if realm and realm ~= "" then name = name .. "-" .. realm end
-    end
-    return name
+local function MyRealm()
+    local realm = GetNormalizedRealmName and GetNormalizedRealmName()
+    if (not realm or realm == "") and GetRealmName then realm = (GetRealmName() or ""):gsub("[%s%-]", "") end
+    return realm
 end
 
-function N.Me()
-    local name, realm = UnitFullName("player")
-    if not realm or realm == "" then realm = GetNormalizedRealmName and GetNormalizedRealmName() end
+local function Join(name, realm)
+    if not name or name == "" then return nil end
+    if not realm or realm == "" then realm = MyRealm() end
     if realm and realm ~= "" then return name .. "-" .. realm end
     return name
 end
 
+-- "Name-Realm" of a unit (the realm is added for same-realm players).
+local function UnitFull(unit)
+    local name, realm
+    if UnitFullName then name, realm = UnitFullName(unit) end
+    if not name and UnitName then name, realm = UnitName(unit) end
+    if not name or name == UNKNOWNOBJECT then return nil end
+    return Join(name, realm and realm:gsub("%s", ""))
+end
+
+function N.Normalize(name)
+    if not name or name == "" then return nil end
+    name = name:gsub("%s+", "")
+    if not name:find("-", 1, true) then return Join(name) end
+    return name
+end
+
+function N.Me()
+    return UnitFull("player") or N.Normalize(UnitName and UnitName("player"))
+end
+
 function N.Short(name)
     if not name then return "?" end
-    return Ambiguate and Ambiguate(name, "short") or (name:match("^[^-]+") or name)
+    return name:match("^[^-]+") or name
 end
 
 local function Print(msg)
     if ns.Print then ns.Print(msg) end
+end
+
+local function Debug(fmt, ...)
+    if N.debug then Print("|cff88ccff[debug]|r " .. fmt:format(...)) end
 end
 
 local function Changed()
@@ -69,34 +89,84 @@ function N:GroupChannel()
     end
     if IsInRaid and IsInRaid() then return "RAID" end
     if IsInGroup and IsInGroup() then return "PARTY" end
+    if GetNumGroupMembers and GetNumGroupMembers() > 1 then return "PARTY" end
 end
 
 function N:IsGrouped()
     return self:GroupChannel() ~= nil
 end
 
+-- All group members: list of { name = "Name-Realm", unit = unitId }.
+function N:Roster()
+    local list, seen = {}, {}
+    local function add(unit)
+        if UnitExists and not UnitExists(unit) then return end
+        local full = UnitFull(unit)
+        if full and not seen[full] then
+            seen[full] = true
+            list[#list + 1] = { name = full, unit = unit }
+        end
+    end
+    add("player")
+    if IsInRaid and IsInRaid() then
+        for i = 1, 40 do add("raid" .. i) end
+    else
+        for i = 1, 4 do add("party" .. i) end
+    end
+    return list
+end
+
+-- Maps any spelling of a group member's name ("Name", "Name-Realm", other realm
+-- formatting) to the one used everywhere in the addon. nil = not in my group.
+function N:Resolve(name)
+    name = N.Normalize(name)
+    if not name then return nil end
+    local roster = self:Roster()
+    for _, m in ipairs(roster) do
+        if m.name == name then return m.name, m.unit end
+    end
+    local short, hit = N.Short(name):lower(), nil
+    for _, m in ipairs(roster) do
+        if N.Short(m.name):lower() == short then
+            if hit then return nil end -- two members with that name: ambiguous
+            hit = m
+        end
+    end
+    if hit then return hit.name, hit.unit end
+end
+
 function N:InMyGroup(full)
-    if full == N.Me() then return true end
-    local unit = Ambiguate and Ambiguate(full, "none") or full
-    if UnitInParty and UnitInParty(unit) then return true end
-    if UnitInRaid and UnitInRaid(unit) then return true end
-    return false
+    return self:Resolve(full) ~= nil
 end
 
 function N:IsOnline(full)
-    local unit = Ambiguate and Ambiguate(full, "none") or full
-    if UnitExists and UnitExists(unit) and UnitIsConnected then
+    local _, unit = self:Resolve(full)
+    if unit and UnitIsConnected then
         return UnitIsConnected(unit) and true or false
     end
     return true
 end
 
+local function RegisterMyPrefix()
+    if RegisterPrefix then pcall(RegisterPrefix, N.prefix) end
+end
+
 -- One message to the whole group; does nothing outside a group.
 function N:Broadcast(msg)
     local channel = self:GroupChannel()
-    if not channel or not SendAddonMessage then return false end
-    SendAddonMessage(self.prefix, self.version .. "|" .. msg, channel)
-    return true
+    if not channel or not SendAddonMessage then
+        Debug("not sent (no group channel): %s", msg)
+        return false
+    end
+    local ok, result = pcall(SendAddonMessage, self.prefix, self.version .. "|" .. msg, channel)
+    -- newer clients return a result code (0 = success), older ones true/nil
+    local sent = ok and (result == nil or result == true or result == 0)
+    Debug("send %s %s -> %s", channel, msg, ok and tostring(result) or ("error: " .. tostring(result)))
+    if not sent and not self.warnedSend then
+        self.warnedSend = true
+        Print(L.sendFailed:format(tostring(result)))
+    end
+    return sent
 end
 
 local function GamePlayerNames()
@@ -123,6 +193,37 @@ function N:Announce()
     end
 end
 
+-- Addon messages can get lost, so the host repeats the invitation every few
+-- seconds while the lobby is open, and a joining player repeats JOIN until the
+-- host's member list contains them.
+local ticker
+local function Tick()
+    local lb = N.lobby
+    if not lb then
+        if ticker then ticker:Cancel() ticker = nil end
+        return
+    end
+    if lb.isHost then
+        N:Announce()
+        if #lb.members > 1 then N:BroadcastLobby() end
+    elseif not lb.confirmed then
+        lb.tries = (lb.tries or 0) + 1
+        if lb.tries > 6 then
+            N.lobby = nil
+            Print(L.joinNoAnswer)
+            Changed()
+            return
+        end
+        N:Broadcast("JOIN|" .. lb.gid)
+    end
+end
+
+local function StartTicker()
+    if not ticker and C_Timer and C_Timer.NewTicker then
+        ticker = C_Timer.NewTicker(4, Tick)
+    end
+end
+
 function N:Host()
     if not self:IsGrouped() then Print(L.notInGroup) return false end
     if G.state and G.state.mode == "net" and not G.state.finished then self:LeaveGame() end
@@ -134,6 +235,7 @@ function N:Host()
         members = { N.Me() },
     }
     self:Announce()
+    StartTicker()
     Changed()
     return true
 end
@@ -165,6 +267,7 @@ function N:Join(gid)
     }
     self.invites[gid] = nil
     self:Broadcast("JOIN|" .. gid)
+    StartTicker()
     Changed()
 end
 
@@ -294,7 +397,11 @@ function handlers.LOBBYLIST(sender, gid, names)
         lb.members = SplitNames(names)
         local stillIn = false
         for _, n in ipairs(lb.members) do if n == N.Me() then stillIn = true end end
-        if not stillIn then N.lobby = nil end
+        if stillIn then
+            lb.confirmed = true
+        elseif lb.confirmed then
+            N.lobby = nil -- the host removed me
+        end
         Changed()
     end
 end
@@ -372,13 +479,39 @@ handlers.SCORE = GameMessage(function(sender, turn, cat, dice)
     return G:RemoteScore(sender, turn, cat, dice)
 end)
 
+-- "/dna ping": every group member with the addon answers with its version.
+function N:Ping()
+    if not self:IsGrouped() then Print(L.notInGroup) return end
+    self.pingAt = GetTime()
+    Print(L.pingSent)
+    self:Broadcast("PING")
+end
+
+local function AddonVersion()
+    local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
+    return (get and get(ADDON, "Version")) or "?"
+end
+
 local GROUP_CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 
 function N:OnAddonMessage(prefix, text, channel, sender)
-    if prefix ~= self.prefix or not text or not GROUP_CHANNELS[channel] then return end
-    sender = N.Normalize(sender)
-    if not sender or sender == N.Me() or not self:InMyGroup(sender) then return end
+    if prefix ~= self.prefix then return end
+    Debug("recv %s from %s: %s", tostring(channel), tostring(sender), tostring(text))
+    if not text or not GROUP_CHANNELS[channel] then Debug("dropped: not a group channel") return end
+    local resolved = self:Resolve(sender)
+    if not resolved then Debug("dropped: %s is not in my group", tostring(sender)) return end
+    sender = resolved
+    if sender == N.Me() then return end
     local parts = Split(text)
+    if parts[2] == "PING" then
+        self:Broadcast("PONG|" .. AddonVersion())
+        return
+    elseif parts[2] == "PONG" then
+        if self.pingAt and GetTime() - self.pingAt < 10 then
+            Print(L.pong:format(N.Short(sender), tostring(parts[3]), tostring(parts[1])))
+        end
+        return
+    end
     if parts[1] ~= self.version then
         if not warnedVersion[sender] then
             warnedVersion[sender] = true
@@ -464,6 +597,8 @@ StaticPopupDialogs["FOREVERDICEANDALE_INVITE"] = {
     preferredIndex = 3,
 }
 
+RegisterMyPrefix()
+
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("CHAT_MSG_ADDON")
@@ -473,7 +608,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
     if event == "CHAT_MSG_ADDON" then
         N:OnAddonMessage(...)
     elseif event == "PLAYER_LOGIN" then
-        if RegisterPrefix then RegisterPrefix(N.prefix) end
+        RegisterMyPrefix()
     else
         N:CheckRoster()
     end

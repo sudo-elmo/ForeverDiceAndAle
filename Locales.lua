@@ -72,7 +72,13 @@ local en = {
     noInviteOpen = "No open invitation.",
     loaded = "loaded – type /diceale to play.",
     fiveShout = "FIVE OF A KIND!",
-    help = "Commands: /diceale or /dna [solo | host | join | leave]",
+    help = "Commands: /diceale or /dna [solo | host | join | leave | ping | debug]",
+    sendFailed = "Could not send a multiplayer message (code %s).",
+    joinNoAnswer = "The host did not answer – please try joining again.",
+    pingSent = "Looking for group members with Dice & Ale...",
+    pong = "%s has Dice & Ale %s (protocol %s).",
+    debugOn = "Multiplayer debug messages on.",
+    debugOff = "Multiplayer debug messages off.",
 }
 
 local de = {
@@ -145,7 +151,13 @@ local de = {
     noInviteOpen = "Keine offene Einladung.",
     loaded = "geladen – /diceale startet das Spiel.",
     fiveShout = "FÜNFERPASCH!",
-    help = "Befehle: /diceale oder /dna [solo | host | join | leave]",
+    help = "Befehle: /diceale oder /dna [solo | host | join | leave | ping | debug]",
+    sendFailed = "Mehrspieler-Nachricht konnte nicht gesendet werden (Code %s).",
+    joinNoAnswer = "Der Gastgeber antwortet nicht – bitte noch einmal beitreten.",
+    pingSent = "Suche Gruppenmitglieder mit Dice & Ale...",
+    pong = "%s hat Dice & Ale %s (Protokoll %s).",
+    debugOn = "Mehrspieler-Debugmeldungen an.",
+    debugOff = "Mehrspieler-Debugmeldungen aus.",
 }
 
 local L = {}

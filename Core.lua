@@ -68,6 +68,11 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
         if not gid then ns.Print(L.noInviteOpen) return end
         N:Join(gid)
         UI:Show("lobby")
+    elseif cmd == "ping" then
+        N:Ping()
+    elseif cmd == "debug" then
+        N.debug = not N.debug
+        ns.Print(N.debug and L.debugOn or L.debugOff)
     elseif cmd == "leave" then
         N:Leave()
         G:End()

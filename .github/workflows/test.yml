@@ -21,3 +21,6 @@ jobs:
 
       - name: Rules and game flow test
         run: lua5.1 tests/rules_test.lua .
+
+      - name: Multiplayer simulation test
+        run: lua5.1 tests/net_test.lua .

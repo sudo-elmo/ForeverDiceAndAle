@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- Multiplayer fix: group members are now matched against the actual party/raid roster, so players see each other's lobby and moves reliably.
+- Lost messages are repeated: the host re-sends the invitation and the lobby list, joining players retry until the host confirms.
+- New command `/dna ping`: shows which group members have Dice & Ale and which version.
+- New command `/dna debug`: prints every multiplayer message sent and received, for troubleshooting.
+
 ## 1.0.0
 
 First release.
