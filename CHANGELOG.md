@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- The window stays open when you take a flight path.
+
 ## 1.0.2
 
 - Multiplayer: players no longer drop out for good. After a `/reload`, a disconnect or a missed message, the game is fetched from the other players and you play on.

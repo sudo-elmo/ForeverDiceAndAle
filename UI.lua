@@ -693,6 +693,35 @@ function UI:Create()
     tinsert(UISpecialFrames, "ForeverDiceAndAleFrame")
     self.frame = f
 
+    -- Taking a flight closes all windows that Escape can close, this one too.
+    -- When it gets closed around a flight (and not by the player), open it again.
+    local taxiOpen, guardUntil = false, 0
+    local taxi = CreateFrame("Frame")
+    for _, e in ipairs({ "TAXIMAP_OPENED", "TAXIMAP_CLOSED", "PLAYER_CONTROL_LOST" }) do
+        pcall(taxi.RegisterEvent, taxi, e)
+    end
+    taxi:SetScript("OnEvent", function(_, event)
+        if event == "TAXIMAP_OPENED" then
+            taxiOpen = true
+        else
+            if event == "TAXIMAP_CLOSED" then taxiOpen = false end
+            guardUntil = GetTime() + 3
+        end
+    end)
+    f:SetScript("OnHide", function()
+        local byPlayer = UI.userClose
+        UI.userClose = nil
+        if byPlayer then return end
+        if taxiOpen or GetTime() < guardUntil then
+            C_Timer.After(0, function()
+                if not f:IsShown() then
+                    f:Show()
+                    UI:Refresh()
+                end
+            end)
+        end
+    end)
+
     -- classic dialog header with the title
     local header = f:CreateTexture(nil, "ARTWORK")
     header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
@@ -704,6 +733,7 @@ function UI:Create()
 
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -5, -5)
+    close:SetScript("PreClick", function() UI.userClose = true end)
 
     self.status = Font(f, "GameFontNormalLarge")
     self.status:SetPoint("TOPLEFT", PAD, -32)
@@ -849,7 +879,12 @@ end
 
 function UI:Toggle()
     self:Create()
-    if self.frame:IsShown() then self.frame:Hide() else self:Show(self.panel) end
+    if self.frame:IsShown() then
+        self.userClose = true
+        self.frame:Hide()
+    else
+        self:Show(self.panel)
+    end
 end
 
 G:On(function(event, isLocal, p, cat, pts)
