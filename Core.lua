@@ -38,14 +38,16 @@ end
 
 -- ---------------------------------------------------------------- solo save game
 
-G:On(function(event)
+G:On(function(event, closedState)
     local db = ns.db
     local s = G.state
     if not db then return end
     if event == "start" then
         if s and s.mode == "solo" then db.saved[CharKey()] = s end
-    elseif event == "finished" or event == "closed" then
-        db.saved[CharKey()] = nil
+    elseif event == "finished" then
+        if s and s.mode == "solo" then db.saved[CharKey()] = nil end
+    elseif event == "closed" then
+        if closedState and closedState.mode == "solo" then db.saved[CharKey()] = nil end
     end
 end)
 

@@ -387,6 +387,8 @@ function UI:RefreshSheet(s)
             local color = INK_SUM
             if p and p.left then
                 name, color = name .. " " .. L.left, INK_DIM
+            elseif p and s.mode == "net" and N:IsAway(p.name) then
+                name, color = name .. " " .. L.away, INK_DIM
             elseif s and not s.finished and s.current == c then
                 color = INK_TURN
             end
@@ -819,7 +821,12 @@ function UI:Refresh()
             elseif s.rollsLeft > 0 then self.status:SetText(L.chooseField)
             else self.status:SetText(L.mustChoose) end
         else
-            self.status:SetText(L.othersTurn:format(ShortName(G:CurrentPlayer().name)))
+            local cur = G:CurrentPlayer().name
+            if s.mode == "net" and N:IsAway(cur) then
+                self.status:SetText(L.waitingAway:format(ShortName(cur)))
+            else
+                self.status:SetText(L.othersTurn:format(ShortName(cur)))
+            end
         end
         self.sub:SetText((s.mode == "net" and L.modeNet or L.modeSolo) .. "   ·   " .. L.round:format(G:Round()))
     end
@@ -855,6 +862,9 @@ G:On(function(event, isLocal, p, cat, pts)
         UI.panel = "results"
         PlayUISound("UI_EPICLOOT_TOAST", 31578)
         if G.state and G.state.mode == "net" then UI:Show("results") return end
+    elseif event == "sync" then
+        UI.panel = nil
+        UI.animating = false
     elseif event == "closed" then
         if UI.panel == "results" then UI.panel = nil end
     elseif event == "score" then

@@ -42,7 +42,7 @@ If no box fits, you have to enter a 0 somewhere.
 3. Everyone else gets an invitation popup and clicks **Join**.
 4. The host clicks **Start game**.
 
-Players who leave the group or go offline are skipped, and the others keep playing.
+If someone leaves, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
 
 ## Commands
 
@@ -67,6 +67,8 @@ You can also open the window from the addon compartment menu (the button next to
 There is no extra server. The addon sends small hidden addon messages over your party or raid channel. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
 
 The active player rolls on their own computer. The other clients only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
+
+Every client sends a short "still here" message every 10 seconds. If a client notices it is behind, or comes back after a reload, it asks the group for the current game and gets a copy from another player.
 
 ## Made with AI
 

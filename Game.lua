@@ -50,9 +50,9 @@ function G:Restore(s)
 end
 
 function G:End()
-    local had = self.state ~= nil
+    local old = self.state
     self.state = nil
-    if had then self:Fire("closed") end
+    if old then self:Fire("closed", old) end
 end
 
 function G:IsRunning()
@@ -247,7 +247,8 @@ function G:RemoteScore(sender, turn, cat, diceStr)
     return true
 end
 
-function G:RemovePlayer(name)
+-- quit = left on purpose (Leave button); such players are not taken back.
+function G:RemovePlayer(name, quit)
     local s = self.state
     if not s or s.finished then return end
     local idx
@@ -256,6 +257,7 @@ function G:RemovePlayer(name)
     end
     if not idx then return end
     s.players[idx].left = true
+    s.players[idx].quit = quit or nil
     self:Fire("left", s.players[idx])
     local _, anyActive = self:AllDone()
     if not anyActive then
@@ -266,4 +268,63 @@ function G:RemovePlayer(name)
     elseif self:AllDone() then
         self:Advance()
     end
+end
+
+-- ---------------------------------------------------------------- multiplayer recovery
+
+function G:FindPlayer(name)
+    local s = self.state
+    if not s or not name then return end
+    name = name:lower()
+    for i, p in ipairs(s.players) do
+        if p.name:lower() == name then return p, i end
+    end
+end
+
+-- A player who was skipped is back: they play again from their next turn on.
+function G:Rejoin(name)
+    local s = self.state
+    local p = self:FindPlayer(name)
+    if not s or s.finished or not p or not p.left or p.quit then return false end
+    p.left = nil
+    self:Fire("rejoin", p)
+    return true
+end
+
+-- The whole game in plain values, to send to a player who lost track of it.
+function G:Snapshot()
+    local s = self.state
+    if not s then return end
+    local snap = {
+        gameId = s.gameId, host = s.host, turn = s.turn, current = s.current,
+        finished = s.finished, rollsLeft = s.rollsLeft,
+        dice = CopyDice(s.dice), held = self:HeldMask(), players = {},
+    }
+    for i, p in ipairs(s.players) do
+        local scores = {}
+        for c, cat in ipairs(R.ALL) do scores[c] = p.scores[cat] end
+        snap.players[i] = { name = p.name, left = p.left and true or false, quit = p.quit and true or false, scores = scores }
+    end
+    return snap
+end
+
+function G:ApplySnapshot(snap, localName)
+    local s = {
+        mode = "net", gameId = snap.gameId, host = snap.host, localName = localName,
+        players = {}, current = snap.current, turn = snap.turn,
+        finished = snap.finished and true or false,
+        dice = CopyDice(snap.dice), held = MaskToHeld(snap.held) or { false, false, false, false, false },
+        rollsLeft = snap.rollsLeft, startedAt = time and time() or 0,
+    }
+    for i, sp in ipairs(snap.players) do
+        local p = R.NewPlayer(sp.name)
+        p.left = sp.left or nil
+        p.quit = sp.quit or nil
+        for c, cat in ipairs(R.ALL) do p.scores[cat] = sp.scores[c] end
+        s.players[i] = p
+    end
+    self.state = s
+    self:Fire("sync")
+    if s.finished then self:Fire("finished") end
+    return s
 end

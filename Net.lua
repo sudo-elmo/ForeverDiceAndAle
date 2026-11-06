@@ -19,7 +19,7 @@ local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
     prefix = "FDiceAle",
-    version = "4",
+    version = "5",
     maxPlayers = 6,
     lobby = nil,   -- { gid, host, isHost, members = { names } }
     invites = {},  -- gid -> { host, time }
@@ -449,7 +449,7 @@ function handlers.LEAVE(sender, gid)
         for _, p in ipairs(s.players) do
             if Same(p.name, sender) and not p.left then
                 Print(L.playerLeft:format(N.Short(sender)))
-                G:RemovePlayer(p.name)
+                G:RemovePlayer(p.name, true)
             end
         end
     end
@@ -460,6 +460,12 @@ local function GameMessage(fn)
         local s = G.state
         if not s or s.mode ~= "net" or s.gameId ~= gid then return end
         local turn = tonumber((...))
+        if not turn then return end
+        if turn > s.turn and not s.finished then
+            -- I missed something: get the current state from the others.
+            N:RequestSync(gid)
+            return
+        end
         if not fn(sender, turn, select(2, ...)) then
             if turn == s.turn then Print(L.cheat:format(N.Short(sender))) end
         end
@@ -475,6 +481,272 @@ end)
 handlers.SCORE = GameMessage(function(sender, turn, cat, dice)
     return G:RemoteScore(sender, turn, cat, dice)
 end)
+
+-- ---------------------------------------------------------------- recovery
+--
+--   ALIVE|gid|turn                      every 10 s from everyone in a running game
+--   SYNCREQ|gid                         "please send me the game" (gid "*" = any game with me in it)
+--   SYNC|gid|for|turn|current|fin|rolls|dice|held|count|host     snapshot header
+--   SYNCP|gid|for|turn|index|name|left|s1,s2,...,s13             one player of the snapshot
+--   KICK|gid|turn|name                  player has been gone too long and is skipped
+--
+-- Nothing is stored: a player who reloads, disconnects or missed messages gets
+-- the game back from the others. Skipped players come back the same way.
+
+local AWAY_AFTER = 25  -- seconds without a message: shown as away
+local KICK_AFTER = 60  -- seconds without a message: skipped (can come back)
+local ALIVE_EVERY = 10
+
+N.seen = {}
+local function Seen(name) N.seen[name:lower()] = GetTime() end
+local function SeenAgo(name)
+    local t = N.seen[name:lower()]
+    return t and (GetTime() - t) or math.huge
+end
+
+function N:IsAway(name)
+    if Same(name, N.Me()) then return false end
+    return SeenAgo(name) > AWAY_AFTER
+end
+
+local function RunningNet(gid)
+    local s = G.state
+    return s and s.mode == "net" and not s.finished and (not gid or s.gameId == gid) and s or nil
+end
+
+local function ActivePlayers(s)
+    local t = {}
+    for _, p in ipairs(s.players) do if not p.left then t[#t + 1] = p end end
+    return t
+end
+
+-- Position among the players who are around (seat order), excluding `except`.
+-- 1 = this client coordinates (skips missing players, answers sync requests first).
+local function MyRank(s, except)
+    local rank = 0
+    for _, p in ipairs(s.players) do
+        if not p.left and not Same(p.name, except) and not N:IsAway(p.name) then
+            rank = rank + 1
+            if Same(p.name, N.Me()) then return rank end
+        end
+    end
+end
+
+-- -- asking for the game
+
+function N:RequestSync(gid)
+    local now = GetTime()
+    local want = self.syncWant
+    if want and want.gid == gid and now - want.sent < 5 then return end
+    self.syncWant = { gid = gid, sent = now, tries = (want and want.gid == gid and want.tries or 0) + 1 }
+    Debug("sync request %s (try %d)", gid, self.syncWant.tries)
+    self:Broadcast("SYNCREQ|" .. gid)
+end
+
+-- -- answering
+
+local function SendSnapshot(s, target)
+    local snap = G:Snapshot()
+    N:Broadcast(("SYNC|%s|%s|%d|%d|%s|%d|%s|%s|%d|%s"):format(snap.gameId, target, snap.turn, snap.current,
+        snap.finished and "1" or "0", snap.rollsLeft, R.EncodeDice(snap.dice), snap.held, #snap.players,
+        snap.host or ""))
+    for i, sp in ipairs(snap.players) do
+        local sc = {}
+        for c = 1, #R.ALL do sc[c] = sp.scores[c] and tostring(sp.scores[c]) or "" end
+        N:Broadcast(("SYNCP|%s|%s|%d|%d|%s|%s|%s"):format(snap.gameId, target, snap.turn, i, sp.name,
+            sp.quit and "2" or sp.left and "1" or "0", table.concat(sc, ",")))
+    end
+end
+
+local pendingReply = {}
+
+function handlers.SYNCREQ(sender, gid)
+    local s = G.state
+    if not s or s.mode ~= "net" or not gid then return end
+    if gid ~= "*" and s.gameId ~= gid then return end
+    local p = G:FindPlayer(sender)
+    if not p then return end
+    if gid == "*" and s.finished then return end
+    if p.quit then return end -- left on purpose: not taken back
+    if p.left and G:Rejoin(p.name) then Print(L.rejoined:format(N.Short(p.name))) end
+    -- The first player around answers at once, the others only if nobody did.
+    local rank = MyRank(s, p.name) or 6
+    local token = {}
+    pendingReply[p.name:lower()] = token
+    C_Timer.After(0.2 + (rank - 1) * 1.5, function()
+        if pendingReply[p.name:lower()] ~= token then return end
+        pendingReply[p.name:lower()] = nil
+        local st = G.state
+        if st and st.mode == "net" and st.gameId == s.gameId then SendSnapshot(st, p.name) end
+    end)
+end
+
+-- -- receiving a snapshot
+
+local incoming
+
+local function DecodeDigits(str)
+    if type(str) ~= "string" or #str ~= 5 then return nil end
+    local d = {}
+    for i = 1, 5 do
+        d[i] = tonumber(str:sub(i, i))
+        if not d[i] or d[i] > 6 then return nil end
+    end
+    return d
+end
+
+local function TryApply()
+    local inc = incoming
+    if not inc or not inc.header then return end
+    for i = 1, inc.header.count do if not inc.players[i] then return end end
+    incoming = nil
+    local snap = inc.header
+    snap.players = inc.players
+    local me, mine = N.Me(), nil
+    for _, sp in ipairs(snap.players) do
+        if Same(sp.name, me) and not sp.quit then mine = sp.name end
+    end
+    if not mine then return end
+    local s = G.state
+    local resumed = not (s and s.mode == "net" and s.gameId == snap.gameId)
+    if not resumed and not s.finished and s.turn > snap.turn then return end -- I am ahead, keep mine
+    N.syncWant = nil
+    for _, sp in ipairs(snap.players) do Seen(sp.name) end
+    G:ApplySnapshot(snap, mine)
+    if resumed then
+        Print(L.resumed)
+        if ns.UI then ns.UI:Show() end
+    end
+end
+
+function handlers.SYNC(sender, gid, target, turn, current, fin, rolls, dice, held, count, host)
+    pendingReply[(target or ""):lower()] = nil -- somebody answered already
+    if not Same(target, N.Me()) then return end
+    local s = G.state
+    -- never replace a different running game
+    if s and s.mode == "net" and not s.finished and s.gameId ~= gid then return end
+    -- only when I asked for it, or to repair the game I am in
+    if not N.syncWant and not (s and s.mode == "net" and s.gameId == gid) then return end
+    turn, current, rolls, count = tonumber(turn), tonumber(current), tonumber(rolls), tonumber(count)
+    dice = DecodeDigits(dice)
+    if not turn or not current or not rolls or not count or not dice or count < 1 or count > N.maxPlayers
+        or current < 1 or current > count or type(held) ~= "string" or #held ~= 5 then return end
+    incoming = {
+        header = { gameId = gid, turn = turn, current = current, finished = fin == "1", rollsLeft = rolls,
+            dice = dice, held = held, count = count, host = host ~= "" and host or sender },
+        players = {},
+    }
+    TryApply()
+end
+
+function handlers.SYNCP(sender, gid, target, turn, index, name, left, scores)
+    if not Same(target, N.Me()) then return end
+    local inc = incoming
+    index, turn = tonumber(index), tonumber(turn)
+    if not inc or inc.header.gameId ~= gid or inc.header.turn ~= turn or not index
+        or index < 1 or index > inc.header.count or not N.Normalize(name) then return end
+    local sc, c = {}, 0
+    for v in ((scores or "") .. ","):gmatch("([^,]*),") do
+        c = c + 1
+        if v ~= "" then
+            sc[c] = tonumber(v)
+            if not sc[c] then return end
+        end
+    end
+    if c ~= #R.ALL then return end
+    inc.players[index] = { name = name, left = left ~= "0", quit = left == "2", scores = sc }
+    TryApply()
+end
+
+-- -- skipping players who are gone
+
+function handlers.ALIVE(sender, gid, turn)
+    local s = RunningNet(gid)
+    turn = tonumber(turn)
+    if not s or not turn then return end
+    local p = G:FindPlayer(sender)
+    if not p then return end
+    -- Skipped, but still playing on their side: they are back.
+    if p.left and G:Rejoin(p.name) then Print(L.rejoined:format(N.Short(p.name))) end
+    if turn > s.turn then N:RequestSync(gid) end
+end
+
+function handlers.KICK(sender, gid, turn, name)
+    local s = RunningNet(gid)
+    turn = tonumber(turn)
+    if not s or not turn or not name then return end
+    if turn > s.turn then N:RequestSync(gid) return end
+    if turn < s.turn then return end
+    if Same(name, N.Me()) then
+        -- They think I am gone, but I am here: get back in.
+        N:RequestSync(gid)
+        return
+    end
+    local p = G:FindPlayer(name)
+    if p and not p.left then
+        Print(L.playerSkipped:format(N.Short(p.name)))
+        G:RemovePlayer(p.name)
+    end
+end
+
+local function CheckMissing(s)
+    if MyRank(s) ~= 1 then return end
+    local rosterOk = N:RosterComplete()
+    for _, p in ipairs(ActivePlayers(s)) do
+        if not Same(p.name, N.Me()) then
+            local gone = SeenAgo(p.name) > KICK_AFTER or (rosterOk and not N:Resolve(p.name))
+            if gone and not p.left then
+                N:Broadcast(("KICK|%s|%d|%s"):format(s.gameId, s.turn, p.name))
+                Print(L.playerSkipped:format(N.Short(p.name)))
+                G:RemovePlayer(p.name)
+                if not RunningNet(s.gameId) then return end
+            end
+        end
+    end
+end
+
+local gameTicker, lastAlive = nil, 0
+local function GameTick()
+    local s = RunningNet()
+    if s then
+        local now = GetTime()
+        if now - lastAlive >= ALIVE_EVERY then
+            lastAlive = now
+            N:Broadcast(("ALIVE|%s|%d"):format(s.gameId, s.turn))
+        end
+        CheckMissing(s)
+        Changed() -- away markers
+    end
+    local want = N.syncWant
+    if want and GetTime() - want.sent >= 5 then
+        if want.tries >= 3 then
+            N.syncWant = nil
+            if want.gid ~= "*" then Print(L.syncFailed) end
+        else
+            N:RequestSync(want.gid)
+        end
+    end
+end
+
+function N:StartGameTicker()
+    if not gameTicker and C_Timer and C_Timer.NewTicker then
+        gameTicker = C_Timer.NewTicker(5, GameTick)
+    end
+end
+
+G:On(function(event)
+    local s = G.state
+    if (event == "start" or event == "sync") and s and s.mode == "net" then
+        for _, p in ipairs(s.players) do Seen(p.name) end
+        lastAlive = 0
+        N:StartGameTicker()
+    end
+end)
+
+-- After logging in or /reload: ask the group whether a game with me is running.
+function N:AskForRunningGame()
+    if self:IsGrouped() and not RunningNet() then self:RequestSync("*") end
+end
 
 -- "/dna ping": every group member with the addon answers with its version.
 function N:Ping()
@@ -510,6 +782,7 @@ function N:OnAddonMessage(prefix, text, channel, sender)
     end
     sender = self:Resolve(name) or name
     if Same(sender, N.Me()) then return end
+    Seen(sender)
     table.remove(parts, 1)
     table.remove(parts, 1)
     -- parts[1] is now the command
@@ -533,10 +806,16 @@ function N:CheckRoster()
     if not self:IsGrouped() then
         wipe(self.invites)
         if self.lobby then self.lobby = nil end
-        local s = G.state
-        if s and s.mode == "net" and not s.finished then
-            Print(L.leftGroup)
-            G:End()
+        -- Loading screens can report "no group" for a moment: only end the game
+        -- when it is still true a little later.
+        local s = RunningNet()
+        if s then
+            C_Timer.After(15, function()
+                if not self:IsGrouped() and RunningNet(s.gameId) then
+                    Print(L.leftGroup)
+                    G:End()
+                end
+            end)
         end
         Changed()
         return
@@ -571,15 +850,7 @@ function N:CheckRoster()
         end
     end
 
-    local s = G.state
-    if s and s.mode == "net" and not s.finished then
-        for _, p in ipairs(s.players) do
-            if not p.left and not Same(p.name, N.Me()) and (not self:InMyGroup(p.name) or not self:IsOnline(p.name)) then
-                Print(L.playerLeft:format(N.Short(p.name)))
-                G:RemovePlayer(p.name)
-            end
-        end
-    end
+    -- Players who left the group are skipped by the next game tick (CheckMissing).
     Changed()
 end
 
@@ -611,6 +882,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
         N:OnAddonMessage(...)
     elseif event == "PLAYER_LOGIN" then
         RegisterMyPrefix()
+        C_Timer.After(5, function() N:AskForRunningGame() end)
     else
         N:CheckRoster()
     end

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2
+
+- Multiplayer: players no longer drop out for good. After a `/reload`, a disconnect or a missed message, the game is fetched from the other players and you play on.
+- A player who is gone for more than a minute is skipped so the others can keep playing, and joins in again when they are back. While they are gone they are shown as "away".
+- If someone leaves the game, the rest keep playing.
+- A short loading screen no longer ends the game.
+- Finishing a multiplayer game no longer deletes your unfinished solo game.
+- Everyone in the group needs 1.0.2 – it does not play together with older versions.
+
 ## 1.0.1
 
 - Multiplayer fix: players did not see each other's lobby or moves. Players are now identified by their character name, which every message carries itself, instead of the sender name WoW delivers (its realm part is spelled differently on different clients).
