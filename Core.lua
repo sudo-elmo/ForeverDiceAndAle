@@ -110,8 +110,22 @@ ev:SetScript("OnEvent", function(self, event, name)
         ns.db = ForeverDiceAndAleDB
         self:UnregisterEvent("ADDON_LOADED")
     elseif event == "PLAYER_LOGIN" then
+        -- 1.0.0 saved games under "Name-Realm"; the key is now just the name.
+        local saved = ns.db and ns.db.saved
+        if saved and saved[CharKey()] == nil then
+            for key, game in pairs(saved) do
+                if key ~= CharKey() and N.Same(N.Normalize(key), CharKey()) then
+                    saved[key] = nil
+                    if type(game) == "table" and game.players and game.players[1] then
+                        game.players[1].name, game.localName = CharKey(), CharKey()
+                        saved[CharKey()] = game
+                    end
+                    break
+                end
+            end
+        end
         -- resume an unfinished solo game of this character
-        local saved = ns.db and ns.db.saved[CharKey()]
+        saved = saved and saved[CharKey()]
         if type(saved) == "table" and saved.mode == "solo" and not saved.finished and saved.players then
             G:Restore(saved)
         end

@@ -1,8 +1,9 @@
 -- Multiplayer over addon messages – group only.
 --
 -- Every message goes over the group channel (PARTY / RAID / INSTANCE_CHAT) and has the
--- form "<version>|<command>|...". Messages from players outside the group are ignored.
+-- form "<version>|<sender name>|<command>|...". Only group channels are used.
 --
+-- Full form: "<version>|<sender name>|<command>|..."
 --   LOBBY|gid                    host   : lobby is open (invitation for the whole group)
 --   JOIN|gid                     player : wants to join lobby gid
 --   FULL|gid|player              host   : lobby full / already started (for player)
@@ -18,7 +19,7 @@ local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
     prefix = "FDiceAle",
-    version = "3",
+    version = "4",
     maxPlayers = 6,
     lobby = nil,   -- { gid, host, isHost, members = { names } }
     invites = {},  -- gid -> { host, time }
@@ -29,43 +30,35 @@ local SendAddonMessage = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or _G.Send
 local RegisterPrefix = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or _G.RegisterAddonMessagePrefix
 
 -- ---------------------------------------------------------------- names
-
-local function MyRealm()
-    local realm = GetNormalizedRealmName and GetNormalizedRealmName()
-    if (not realm or realm == "") and GetRealmName then realm = (GetRealmName() or ""):gsub("[%s%-]", "") end
-    return realm
-end
-
-local function Join(name, realm)
-    if not name or name == "" then return nil end
-    if not realm or realm == "" then realm = MyRealm() end
-    if realm and realm ~= "" then return name .. "-" .. realm end
-    return name
-end
-
--- "Name-Realm" of a unit (the realm is added for same-realm players).
-local function UnitFull(unit)
-    local name, realm
-    if UnitFullName then name, realm = UnitFullName(unit) end
-    if not name and UnitName then name, realm = UnitName(unit) end
-    if not name or name == UNKNOWNOBJECT then return nil end
-    return Join(name, realm and realm:gsub("%s", ""))
-end
+-- Players are identified by their character name only ("Anna"), without the
+-- realm: the realm part is spelled differently depending on the client API
+-- (UnitName, UnitFullName, the addon message sender), which made players fail
+-- to recognise each other.
 
 function N.Normalize(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    name = name:gsub("%s+", ""):match("^[^-]+")
     if not name or name == "" then return nil end
-    name = name:gsub("%s+", "")
-    if not name:find("-", 1, true) then return Join(name) end
     return name
-end
-
-function N.Me()
-    return UnitFull("player") or N.Normalize(UnitName and UnitName("player"))
 end
 
 function N.Short(name)
-    if not name then return "?" end
-    return name:match("^[^-]+") or name
+    return N.Normalize(name) or "?"
+end
+
+local function Same(a, b)
+    return a ~= nil and b ~= nil and a:lower() == b:lower()
+end
+N.Same = Same
+
+local function UnitShort(unit)
+    local name = UnitName and UnitName(unit)
+    if not name or name == UNKNOWNOBJECT then return nil end
+    return N.Normalize(name)
+end
+
+function N.Me()
+    return UnitShort("player")
 end
 
 local function Print(msg)
@@ -96,15 +89,15 @@ function N:IsGrouped()
     return self:GroupChannel() ~= nil
 end
 
--- All group members: list of { name = "Name-Realm", unit = unitId }.
+-- All group members: list of { name = "Anna", unit = unitId }.
 function N:Roster()
     local list, seen = {}, {}
     local function add(unit)
         if UnitExists and not UnitExists(unit) then return end
-        local full = UnitFull(unit)
-        if full and not seen[full] then
-            seen[full] = true
-            list[#list + 1] = { name = full, unit = unit }
+        local name = UnitShort(unit)
+        if name and not seen[name:lower()] then
+            seen[name:lower()] = true
+            list[#list + 1] = { name = name, unit = unit }
         end
     end
     add("player")
@@ -116,35 +109,41 @@ function N:Roster()
     return list
 end
 
--- Maps any spelling of a group member's name ("Name", "Name-Realm", other realm
--- formatting) to the one used everywhere in the addon. nil = not in my group.
+-- The group member with that name (any spelling, with or without realm).
+-- Returns name, unit – or nil when nobody in the group has that name.
 function N:Resolve(name)
     name = N.Normalize(name)
     if not name then return nil end
-    local roster = self:Roster()
-    for _, m in ipairs(roster) do
-        if m.name == name then return m.name, m.unit end
+    for _, m in ipairs(self:Roster()) do
+        if Same(m.name, name) then return m.name, m.unit end
     end
-    local short, hit = N.Short(name):lower(), nil
-    for _, m in ipairs(roster) do
-        if N.Short(m.name):lower() == short then
-            if hit then return nil end -- two members with that name: ambiguous
-            hit = m
-        end
-    end
-    if hit then return hit.name, hit.unit end
 end
 
-function N:InMyGroup(full)
-    return self:Resolve(full) ~= nil
+-- The roster can only be trusted when it lists everybody in the group.
+function N:RosterComplete()
+    local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+    return n > 0 and #self:Roster() >= n
 end
 
-function N:IsOnline(full)
-    local _, unit = self:Resolve(full)
+-- Without a complete roster nobody is treated as gone: messages on the group
+-- channel can only come from group members anyway.
+function N:InMyGroup(name)
+    if self:Resolve(name) ~= nil then return true end
+    return not self:RosterComplete()
+end
+
+function N:IsOnline(name)
+    local _, unit = self:Resolve(name)
     if unit and UnitIsConnected then
         return UnitIsConnected(unit) and true or false
     end
     return true
+end
+
+local function RosterText()
+    local t = {}
+    for _, m in ipairs(N:Roster()) do t[#t + 1] = m.name .. "=" .. m.unit end
+    return table.concat(t, ", ")
 end
 
 local function RegisterMyPrefix()
@@ -158,7 +157,11 @@ function N:Broadcast(msg)
         Debug("not sent (no group channel): %s", msg)
         return false
     end
-    local ok, result = pcall(SendAddonMessage, self.prefix, self.version .. "|" .. msg, channel)
+    local me = N.Me()
+    if not me then Debug("not sent (own name unknown): %s", msg) return false end
+    -- The sender writes its own character name into every message: the
+    -- sender name WoW delivers is spelled differently on different clients.
+    local ok, result = pcall(SendAddonMessage, self.prefix, self.version .. "|" .. me .. "|" .. msg, channel)
     -- newer clients return a result code (0 = success), older ones true/nil
     local sent = ok and (result == nil or result == true or result == 0)
     Debug("send %s %s -> %s", channel, msg, ok and tostring(result) or ("error: " .. tostring(result)))
@@ -251,12 +254,6 @@ end
 function N:Join(gid)
     local inv = gid and self.invites[gid]
     if not inv then Print(L.noInviteOpen) return end
-    if not self:InMyGroup(inv.host) then
-        self.invites[gid] = nil
-        Print(L.notInGroup)
-        Changed()
-        return
-    end
     if G.state and G.state.mode == "net" and not G.state.finished then self:LeaveGame() end
     if self.lobby then self:LeaveLobby() end
     self.lobby = {
@@ -370,7 +367,7 @@ function handlers.JOIN(sender, gid)
     local lb = N.lobby
     if not lb or not lb.isHost or lb.gid ~= gid then return end
     for _, n in ipairs(lb.members) do
-        if n == sender then N:BroadcastLobby() return end
+        if Same(n, sender) then N:BroadcastLobby() return end
     end
     if #lb.members >= N.maxPlayers then
         N:Broadcast("FULL|" .. gid .. "|" .. sender)
@@ -384,7 +381,7 @@ end
 
 function handlers.FULL(sender, gid, target)
     local lb = N.lobby
-    if target == N.Me() and lb and not lb.isHost and lb.gid == gid and lb.host == sender then
+    if Same(target, N.Me()) and lb and not lb.isHost and lb.gid == gid and Same(lb.host, sender) then
         N.lobby = nil
         Print(L.lobbyFull)
         Changed()
@@ -393,10 +390,10 @@ end
 
 function handlers.LOBBYLIST(sender, gid, names)
     local lb = N.lobby
-    if lb and not lb.isHost and lb.gid == gid and lb.host == sender then
+    if lb and not lb.isHost and lb.gid == gid and Same(lb.host, sender) then
         lb.members = SplitNames(names)
         local stillIn = false
-        for _, n in ipairs(lb.members) do if n == N.Me() then stillIn = true end end
+        for _, n in ipairs(lb.members) do if Same(n, N.Me()) then stillIn = true end end
         if stillIn then
             lb.confirmed = true
         elseif lb.confirmed then
@@ -408,9 +405,9 @@ end
 
 function handlers.CLOSE(sender, gid)
     local inv = N.invites[gid or ""]
-    if inv and inv.host == sender then N.invites[gid] = nil end
+    if inv and Same(inv.host, sender) then N.invites[gid] = nil end
     local lb = N.lobby
-    if lb and lb.gid == gid and lb.host == sender then
+    if lb and lb.gid == gid and Same(lb.host, sender) then
         N.lobby = nil
         Print(L.lobbyClosed)
     end
@@ -419,12 +416,12 @@ end
 
 function handlers.START(sender, gid, names)
     local inv = N.invites[gid or ""]
-    if inv and inv.host == sender then N.invites[gid] = nil end
+    if inv and Same(inv.host, sender) then N.invites[gid] = nil end
     local lb = N.lobby
-    if not lb or lb.isHost or lb.gid ~= gid or lb.host ~= sender then Changed() return end
+    if not lb or lb.isHost or lb.gid ~= gid or not Same(lb.host, sender) then Changed() return end
     local players = SplitNames(names)
     local me, found = N.Me(), false
-    for _, n in ipairs(players) do if n == me then found = true end end
+    for _, n in ipairs(players) do if Same(n, me) then found, me = true, n end end
     N.lobby = nil
     if not found or #players < 2 then Changed() return end
     G:Start({
@@ -438,7 +435,7 @@ function handlers.LEAVE(sender, gid)
     local lb = N.lobby
     if lb and lb.isHost and lb.gid == gid then
         for i, n in ipairs(lb.members) do
-            if n == sender then
+            if Same(n, sender) then
                 table.remove(lb.members, i)
                 N:BroadcastLobby()
                 Changed()
@@ -450,9 +447,9 @@ function handlers.LEAVE(sender, gid)
     local s = G.state
     if s and s.mode == "net" and s.gameId == gid then
         for _, p in ipairs(s.players) do
-            if p.name == sender and not p.left then
+            if Same(p.name, sender) and not p.left then
                 Print(L.playerLeft:format(N.Short(sender)))
-                G:RemovePlayer(sender)
+                G:RemovePlayer(p.name)
             end
         end
     end
@@ -496,33 +493,38 @@ local GROUP_CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 
 function N:OnAddonMessage(prefix, text, channel, sender)
     if prefix ~= self.prefix then return end
-    Debug("recv %s from %s: %s", tostring(channel), tostring(sender), tostring(text))
+    Debug("recv %s from %s: %s (me=%s, roster: %s)", tostring(channel), tostring(sender),
+        tostring(text), tostring(N.Me()), RosterText())
     if not text or not GROUP_CHANNELS[channel] then Debug("dropped: not a group channel") return end
-    local resolved = self:Resolve(sender)
-    if not resolved then Debug("dropped: %s is not in my group", tostring(sender)) return end
-    sender = resolved
-    if sender == N.Me() then return end
     local parts = Split(text)
-    if parts[2] == "PING" then
+    -- "<version>|<name>|<command>|..." – only group members can send on a group
+    -- channel, so the name is trusted; the roster just gives the usual spelling.
+    local name = N.Normalize(parts[2])
+    if parts[1] ~= self.version or not name then
+        local who = N.Normalize(sender) or "?"
+        if not warnedVersion[who] then
+            warnedVersion[who] = true
+            Print(L.versionMismatch:format(who))
+        end
+        return
+    end
+    sender = self:Resolve(name) or name
+    if Same(sender, N.Me()) then return end
+    table.remove(parts, 1)
+    table.remove(parts, 1)
+    -- parts[1] is now the command
+    if parts[1] == "PING" then
         self:Broadcast("PONG|" .. AddonVersion())
         return
-    elseif parts[2] == "PONG" then
+    elseif parts[1] == "PONG" then
         if self.pingAt and GetTime() - self.pingAt < 10 then
-            Print(L.pong:format(N.Short(sender), tostring(parts[3]), tostring(parts[1])))
+            Print(L.pong:format(N.Short(sender), tostring(parts[2]), self.version))
         end
         return
     end
-    if parts[1] ~= self.version then
-        if not warnedVersion[sender] then
-            warnedVersion[sender] = true
-            Print(L.versionMismatch:format(N.Short(sender)))
-        end
-        return
-    end
-    local handler = handlers[parts[2]]
-    if handler then handler(sender, unpack(parts, 3)) end
+    local handler = handlers[parts[1]]
+    if handler then handler(sender, unpack(parts, 2)) end
 end
-
 -- ---------------------------------------------------------------- roster changes
 
 local announceToken
@@ -551,7 +553,7 @@ function N:CheckRoster()
             local changed = false
             for i = #lb.members, 1, -1 do
                 local n = lb.members[i]
-                if n ~= N.Me() and (not self:InMyGroup(n) or not self:IsOnline(n)) then
+                if not Same(n, N.Me()) and (not self:InMyGroup(n) or not self:IsOnline(n)) then
                     table.remove(lb.members, i)
                     changed = true
                 end
@@ -572,7 +574,7 @@ function N:CheckRoster()
     local s = G.state
     if s and s.mode == "net" and not s.finished then
         for _, p in ipairs(s.players) do
-            if not p.left and p.name ~= N.Me() and (not self:InMyGroup(p.name) or not self:IsOnline(p.name)) then
+            if not p.left and not Same(p.name, N.Me()) and (not self:InMyGroup(p.name) or not self:IsOnline(p.name)) then
                 Print(L.playerLeft:format(N.Short(p.name)))
                 G:RemovePlayer(p.name)
             end

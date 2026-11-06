@@ -31,7 +31,10 @@ local function NewClient(name, senderStyle)
         for _, o in ipairs(clients) do if o ~= c and o.grouped then others[#others + 1] = o end end
         return others[i]
     end
-    env.UnitExists = function(unit) return unitClient(unit) ~= nil end
+    env.UnitExists = function(unit)
+        if senderStyle == "noroster" and unit ~= "player" then return false end
+        return unitClient(unit) ~= nil
+    end
     env.UnitFullName = function(unit)
         local o = unitClient(unit)
         if not o then return nil end
@@ -80,7 +83,10 @@ local function NewClient(name, senderStyle)
         setfenv(chunk, env)
         chunk("ForeverDiceAndAle", ns)
     end
-    c.senderName = senderStyle == "short" and name or (name .. "-" .. REALM)
+    c.senderName = (senderStyle == "short" and name)
+        or (senderStyle == "oddrealm" and (name .. "-Forever Realm"))
+        or (senderStyle == "garbage" and "Unknown")
+        or (name .. "-" .. REALM)
     c.grouped, c.online = true, true
     return c
 end
@@ -173,6 +179,9 @@ end
 Run("full", false)
 Run("short", false)
 Run("full", true)
+Run("oddrealm", false)
+Run("noroster", false)
+Run("garbage", false)
 
 if fails > 0 then print(fails .. " FAILURES") os.exit(1) end
 print("NET OK")
