@@ -68,11 +68,15 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
         if not gid then ns.Print(L.noInviteOpen) return end
         N:Join(gid)
         UI:Show("lobby")
+    --@debug@
+    -- Test commands: only in the local copy. The packager comments this block
+    -- out for releases.
     elseif cmd == "ping" then
         N:Ping()
     elseif cmd == "debug" then
         N.debug = not N.debug
         ns.Print(N.debug and L.debugOn or L.debugOff)
+    --@end-debug@
     elseif cmd == "leave" then
         N:Leave()
         G:End()

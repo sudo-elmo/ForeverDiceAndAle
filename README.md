@@ -53,8 +53,6 @@ Players who leave the group or go offline are skipped, and the others keep playi
 | `/diceale host` | Host a multiplayer game for your group |
 | `/diceale join` | Join the latest invitation |
 | `/diceale leave` | Leave the current game or lobby |
-| `/diceale ping` | Show which group members have the addon |
-| `/diceale debug` | Print multiplayer messages (troubleshooting) |
 
 You can also open the window from the addon compartment menu (the button next to the minimap).
 
