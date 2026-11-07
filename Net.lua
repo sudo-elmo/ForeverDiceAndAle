@@ -355,7 +355,7 @@ function handlers.LOBBY(sender, gid)
     local known = N.invites[gid] ~= nil
     N.invites[gid] = { host = sender, time = GetTime() }
     if not known then
-        if not (G:IsRunning() and G.state.mode == "net") then
+        if not (G:IsRunning() and G.state.mode == "net") and not (ns.db and ns.db.invitePopup == false) then
             StaticPopup_Show("FOREVERDICEANDALE_INVITE", N.Short(sender), nil, gid)
         end
         Print(L.gotInvite:format(N.Short(sender)))

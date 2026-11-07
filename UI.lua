@@ -56,6 +56,11 @@ local FONT_INK_SUM = MakeFont("ForeverDiceAndAleInkSum", GameFontNormal, INK_SUM
 local FONT_INK_LARGE = MakeFont("ForeverDiceAndAleInkLarge", GameFontNormalLarge, INK)
 local FONT_INK_SMALL = MakeFont("ForeverDiceAndAleInkSmall", GameFontNormalSmall, INK)
 
+-- Setting from the options page (nil = default on).
+local function Opt(key)
+    return not (ns.db and ns.db[key] == false)
+end
+
 local function PlayUISound(kit, fallback)
     pcall(PlaySound, (SOUNDKIT and SOUNDKIT[kit]) or fallback)
 end
@@ -195,7 +200,7 @@ local function CreateDie(tray, index)
     b.heldText:SetText(L.held)
 
     b:SetScript("OnClick", function()
-        if not UI.animating and G:ToggleHold(index) then
+        if not UI.animating and G:ToggleHold(index) and Opt("diceSound") then
             PlayUISound("IG_MAINMENU_OPTION_CHECKBOX_ON", 856)
         end
     end)
@@ -229,7 +234,7 @@ function UI:AnimateRoll()
     self.animating = true
     self.animEnd = GetTime() + 0.45
     self.animTick = 0
-    PlayUISound("IG_BACKPACK_COIN_SELECT", 863)
+    if Opt("diceSound") then PlayUISound("IG_BACKPACK_COIN_SELECT", 863) end
 end
 
 -- ---------------------------------------------------------------- sheet
@@ -924,6 +929,18 @@ function UI:Toggle()
     end
 end
 
+-- Multiplayer: my turn has just started (sound and/or open the window).
+local wasMyTurn = false
+local function CheckMyTurn()
+    local s = G.state
+    local mine = s and s.mode == "net" and G:IsLocalTurn() or false
+    if mine and not wasMyTurn then
+        if Opt("turnSound") then PlayUISound("READY_CHECK", 8960) end
+        if Opt("autoOpenOnTurn") and not UI.frame:IsShown() then UI:Show(nil) end
+    end
+    wasMyTurn = mine
+end
+
 G:On(function(event, isLocal, p, cat, pts)
     if event == "roll" then
         UI:AnimateRoll()
@@ -944,6 +961,11 @@ G:On(function(event, isLocal, p, cat, pts)
             UI:Flash(L.fiveShout)
             PlayUISound("LEVELUPSOUND", 888)
         end
+    end
+    if event == "start" or event == "sync" or event == "turn" or event == "left"
+        or event == "rejoin" or event == "closed" or event == "finished" then
+        UI:Create()
+        CheckMyTurn()
     end
     UI:Refresh()
 end)

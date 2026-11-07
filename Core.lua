@@ -7,6 +7,10 @@ local DEFAULTS = {
     saved = {},
     closeOnEscape = true,
     keepOpenOnFlight = true,
+    diceSound = true,
+    turnSound = true,
+    autoOpenOnTurn = false,
+    invitePopup = true,
 }
 
 local function ApplyDefaults(db, defaults)

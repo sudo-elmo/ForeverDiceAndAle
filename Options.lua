@@ -8,17 +8,31 @@ local function Register()
     if category or not (Settings and Settings.RegisterVerticalLayoutCategory and ns.db) then return end
     category = Settings.RegisterVerticalLayoutCategory(L.title)
 
-    local function Checkbox(key, variable, label, tooltip, onChange)
-        local setting = Settings.RegisterAddOnSetting(category, variable, key, ns.db,
-            Settings.VarType.Boolean, label, Settings.Default.True)
+    local function Header(text)
+        if Settings.RegisterInitializer and CreateSettingsListSectionHeaderInitializer then
+            Settings.RegisterInitializer(category, CreateSettingsListSectionHeaderInitializer(text))
+        end
+    end
+
+    local function Checkbox(key, label, tooltip, default, onChange)
+        local setting = Settings.RegisterAddOnSetting(category, "FOREVER_DICE_AND_ALE_" .. key:upper(), key,
+            ns.db, Settings.VarType.Boolean, label, default and Settings.Default.True or Settings.Default.False)
         if onChange then setting:SetValueChangedCallback(onChange) end
         Settings.CreateCheckbox(category, setting, tooltip)
     end
 
-    Checkbox("closeOnEscape", "FOREVER_DICE_AND_ALE_CLOSE_ON_ESCAPE", L.optCloseOnEscape, L.optCloseOnEscapeTip,
+    Header(L.optWindow)
+    Checkbox("closeOnEscape", L.optCloseOnEscape, L.optCloseOnEscapeTip, true,
         function() if ns.UI then ns.UI:ApplyEscape() end end)
-    Checkbox("keepOpenOnFlight", "FOREVER_DICE_AND_ALE_KEEP_OPEN_ON_FLIGHT", L.optKeepOpenOnFlight,
-        L.optKeepOpenOnFlightTip)
+    Checkbox("keepOpenOnFlight", L.optKeepOpenOnFlight, L.optKeepOpenOnFlightTip, true)
+
+    Header(L.optSound)
+    Checkbox("diceSound", L.optDiceSound, L.optDiceSoundTip, true)
+    Checkbox("turnSound", L.optTurnSound, L.optTurnSoundTip, true)
+
+    Header(L.optMultiplayer)
+    Checkbox("autoOpenOnTurn", L.optAutoOpen, L.optAutoOpenTip, false)
+    Checkbox("invitePopup", L.optInvitePopup, L.optInvitePopupTip, true)
 
     Settings.RegisterAddOnCategory(category)
 end

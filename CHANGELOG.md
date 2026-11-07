@@ -4,6 +4,8 @@
 
 - The window stays open when you take a flight path.
 - New settings page (Options → AddOns → Forever Dice & Ale, or `/diceale options`): choose whether Escape closes the window and whether it stays open during flights. A small gear next to the window's close button opens it.
+- New in multiplayer: a "your turn" sound, and optionally the window opens by itself when your turn starts.
+- Settings for dice sounds, the "your turn" sound, opening the window on your turn (off by default) and the invitation popup.
 
 ## 1.0.2
 

@@ -50,6 +50,10 @@ In **Options → AddOns → Forever Dice & Ale** (or `/diceale options`):
 
 - **Close the window with Escape** – on by default.
 - **Keep the window open when taking a flight** – on by default.
+- **Dice sounds** – on by default.
+- **"Your turn" sound** – multiplayer, on by default.
+- **Open the window when it is my turn** – multiplayer, off by default.
+- **Show invitation popup** – on by default; when off, invitations only show up in chat.
 
 ## Commands
 
