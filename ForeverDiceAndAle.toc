@@ -19,3 +19,4 @@ Game.lua
 Net.lua
 UI.lua
 Core.lua
+Options.lua

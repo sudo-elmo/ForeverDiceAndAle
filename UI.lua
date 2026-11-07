@@ -690,8 +690,8 @@ function UI:Create()
         f:SetPoint("CENTER")
     end
     f:Hide()
-    tinsert(UISpecialFrames, "ForeverDiceAndAleFrame")
     self.frame = f
+    self:ApplyEscape()
 
     -- Taking a flight closes all windows that Escape can close, this one too.
     -- When it gets closed around a flight (and not by the player), open it again.
@@ -712,6 +712,7 @@ function UI:Create()
         local byPlayer = UI.userClose
         UI.userClose = nil
         if byPlayer then return end
+        if ns.db and ns.db.keepOpenOnFlight == false then return end
         if taxiOpen or GetTime() < guardUntil then
             C_Timer.After(0, function()
                 if not f:IsShown() then
@@ -870,6 +871,16 @@ function UI:Refresh()
 end
 
 -- panel: nil (sheet), "lobby", "results"
+-- Escape closes the window only while it is in UISpecialFrames (setting).
+function UI:ApplyEscape()
+    if not self.frame then return end
+    local name, want = "ForeverDiceAndAleFrame", not (ns.db and ns.db.closeOnEscape == false)
+    for i = #UISpecialFrames, 1, -1 do
+        if UISpecialFrames[i] == name then table.remove(UISpecialFrames, i) end
+    end
+    if want then tinsert(UISpecialFrames, name) end
+end
+
 function UI:Show(panel)
     self:Create()
     self.panel = panel

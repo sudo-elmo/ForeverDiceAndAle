@@ -5,6 +5,8 @@ local L, G, N, UI = ns.L, ns.Game, ns.Net, ns.UI
 local DEFAULTS = {
     pos = nil,
     saved = {},
+    closeOnEscape = true,
+    keepOpenOnFlight = true,
 }
 
 local function ApplyDefaults(db, defaults)
@@ -79,6 +81,8 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
         N.debug = not N.debug
         ns.Print(N.debug and L.debugOn or L.debugOff)
     --@end-debug@
+    elseif cmd == "options" or cmd == "settings" or cmd == "config" then
+        ns.OpenOptions()
     elseif cmd == "leave" then
         N:Leave()
         G:End()

@@ -44,6 +44,13 @@ If no box fits, you have to enter a 0 somewhere.
 
 If someone leaves, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
 
+## Settings
+
+In **Options → AddOns → Forever Dice & Ale** (or `/diceale options`):
+
+- **Close the window with Escape** – on by default.
+- **Keep the window open when taking a flight** – on by default.
+
 ## Commands
 
 | Command | What it does |
@@ -53,6 +60,7 @@ If someone leaves, the others keep playing. Players who disconnect, `/reload` or
 | `/diceale host` | Host a multiplayer game for your group |
 | `/diceale join` | Join the latest invitation |
 | `/diceale leave` | Leave the current game or lobby |
+| `/diceale options` | Open the settings |
 
 You can also open the window from the addon compartment menu (the button next to the minimap).
 
