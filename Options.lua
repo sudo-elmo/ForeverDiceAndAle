@@ -37,7 +37,19 @@ local function Register()
     Settings.RegisterAddOnCategory(category)
 end
 
+-- Blizzard's settings window cannot be opened by addons during combat
+-- (protected OpenSettingsPanel). Calling it anyway leaves a half-open,
+-- invisible settings frame that swallows all clicks until Escape.
 function ns.OpenOptions()
+    if InCombatLockdown and InCombatLockdown() then
+        local msg = ERR_NOT_IN_COMBAT or L.notInCombat
+        if UIErrorsFrame and UIErrorsFrame.AddMessage then
+            UIErrorsFrame:AddMessage(msg, 1, 0.1, 0.1)
+        else
+            ns.Print(msg)
+        end
+        return
+    end
     Register()
     if category and Settings.OpenToCategory then
         if not pcall(Settings.OpenToCategory, category:GetID()) then pcall(Settings.OpenToCategory, category) end

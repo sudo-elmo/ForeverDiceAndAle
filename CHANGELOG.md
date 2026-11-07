@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4
+
+- The settings gear (and `/diceale options`) no longer locks up the screen when used in combat. The game does not allow opening the settings in combat; you now get the usual "not possible in combat" message instead, and everything stays clickable.
+
 ## 1.0.3
 
 - The window stays open when you take a flight path.
