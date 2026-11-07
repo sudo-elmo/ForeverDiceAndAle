@@ -3,7 +3,7 @@
 ## 1.0.3
 
 - The window stays open when you take a flight path.
-- New settings page (Options → AddOns → Forever Dice & Ale, or `/diceale options`): choose whether Escape closes the window and whether it stays open during flights.
+- New settings page (Options → AddOns → Forever Dice & Ale, or `/diceale options`): choose whether Escape closes the window and whether it stays open during flights. A small gear next to the window's close button opens it.
 
 ## 1.0.2
 
