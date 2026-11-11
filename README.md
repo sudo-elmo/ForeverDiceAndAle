@@ -4,7 +4,7 @@
 
 *A round of dice, a round of ale.*
 
-The classic five-dice game for **World of Warcraft: Forever**. Play alone while you wait for your group to fill up, or pull up a chair with your party and see who buys the next round.
+The classic five-dice game for **World of Warcraft: Forever**. Play alone while you wait for your group to fill up, or pull up a chair with your friends and see who buys the next round – in a group or with a simple lobby code.
 
 ---
 
@@ -12,7 +12,7 @@ The classic five-dice game for **World of Warcraft: Forever**. Play alone while 
 
 - The well-known five-dice game with five dice, three rolls per turn and 13 boxes to fill
 - **Solo mode** – an unfinished game is saved and continues after `/reload` or logging out
-- **Multiplayer with your party or raid** – 2 to 6 players, everyone sees every roll live
+- **Multiplayer for 2 to 6 players** – with your group or with a lobby code, everyone sees every roll live
 - Classic look: parchment score sheet, stone dice tray and the familiar dialog frame
 - Click a box to see what it scores. Possible points are shown in green before you choose.
 - English and German in game (follows your game language)
@@ -37,12 +37,24 @@ If no box fits, you have to enter a 0 somewhere.
 
 ## Multiplayer
 
-1. Get into a party or raid with your friends. Everyone needs the addon.
-2. One player opens **Multiplayer → Host game**.
-3. Everyone else gets an invitation popup and clicks **Join**.
+Everyone needs the addon. There are two ways to get into a game:
+
+**With your group**
+
+1. One player opens **Multiplayer → Host game**.
+2. Everyone in the party or raid gets an invitation popup and clicks **Join**.
+3. The host clicks **Start game**.
+
+**With a lobby code** – no group needed
+
+1. One player opens **Multiplayer → Host game**. The lobby shows a code like `Anna-4821`.
+2. The host shares the code, in chat for example.
+3. The others enter it under **Multiplayer → Join with a lobby code**, or type `/dna join Anna-4821`.
 4. The host clicks **Start game**.
 
-If someone leaves, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
+Both ways work at the same time: group members see the lobby by themselves, everyone else uses the code. Lobby codes only work between players on the same realm and faction.
+
+Once the game is running, nobody has to stay in the group. If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
 
 ## Settings
 
@@ -61,8 +73,9 @@ In **Options → AddOns → Forever Dice & Ale** (or `/diceale options`):
 |---|---|
 | `/diceale` or `/dna` | Open or close the window |
 | `/diceale solo` | Start a new solo game |
-| `/diceale host` | Host a multiplayer game for your group |
+| `/diceale host` | Host a multiplayer game and get a lobby code |
 | `/diceale join` | Join the latest invitation |
+| `/diceale join Anna-4821` | Join a lobby with its code |
 | `/diceale leave` | Leave the current game or lobby |
 | `/diceale options` | Open the settings |
 
@@ -76,11 +89,13 @@ You can also open the window from the addon compartment menu (the button next to
 
 ## How multiplayer works
 
-There is no extra server. The addon sends small hidden addon messages over your party or raid channel. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
+There is no extra server. The addon sends small hidden addon messages: over your party or raid channel, and as hidden addon whispers to players who are not in your group. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
+
+A lobby code is the host's name plus a four-digit PIN. Joining with a code sends the PIN to the host as a hidden whisper, and the host only lets you in if it matches. Whispers only reach players on your own realm and faction.
 
 The active player rolls on their own computer. The other clients only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
 
-Every client sends a short "still here" message every 10 seconds. If a client notices it is behind, or comes back after a reload, it asks the group for the current game and gets a copy from another player.
+Every client sends a short "still here" message every 10 seconds. If a client notices it is behind, or comes back after a reload, it asks the other players for the current game and gets a copy from one of them.
 
 ## Made with AI
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5
+
+- New: start a multiplayer game without a group. When you host a game you get a lobby code like `Anna-4821`. Share it, and the others join under Multiplayer → "Join with a lobby code" or with `/dna join Anna-4821`. Group members still get the invitation as before, both work at the same time. Lobby codes work between players on the same realm and faction.
+- Nobody has to stay in the group any more: once the lobby is open or the game is running, you can leave the group and everybody keeps playing together.
+- If all five dice are held, the Roll button is disabled – there is nothing left to roll.
+- Fixed a broken symbol in the tooltip of the "Show invitation popup" setting.
+
 ## 1.0.4
 
 - The settings gear (and `/diceale options`) no longer locks up the screen when used in combat. The game does not allow opening the settings in combat; you now get the usual "not possible in combat" message instead, and everything stays clickable.

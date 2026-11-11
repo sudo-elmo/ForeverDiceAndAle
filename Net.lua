@@ -1,7 +1,11 @@
--- Multiplayer over addon messages – group only.
+-- Multiplayer over addon messages.
 --
--- Every message goes over the group channel (PARTY / RAID / INSTANCE_CHAT) and has the
--- form "<version>|<sender name>|<command>|...". Only group channels are used.
+-- Messages go over the group channel (PARTY / RAID / INSTANCE_CHAT) and as
+-- addon whispers to every lobby member or player who is not in my group. So a
+-- game can be set up in a group (group members see the lobby by themselves)
+-- or with a lobby code ("Anna-4821": host name plus a PIN), and the group can
+-- be left at any time.
+-- Every message has the form "<version>|<sender name>|<command>|...".
 --
 -- Full form: "<version>|<sender name>|<command>|..."
 --   LOBBY|gid                    host   : lobby is open (invitation for the whole group)
@@ -14,6 +18,8 @@
 --   HOLD|gid|turn|held           active : held dice changed
 --   SCORE|gid|turn|cat|dice      active : box chosen (receivers recompute points)
 --   LEAVE|gid                    any    : player left lobby / game
+--   CODEJOIN|pin                 player : wants to join the host's lobby with a code (whisper)
+--   BADCODE                      host   : wrong code or no open lobby (whisper)
 local ADDON, ns = ...
 local L, R, G = ns.L, ns.Rules, ns.Game
 
@@ -150,26 +156,84 @@ local function RegisterMyPrefix()
     if RegisterPrefix then pcall(RegisterPrefix, N.prefix) end
 end
 
--- One message to the whole group; does nothing outside a group.
-function N:Broadcast(msg)
-    local channel = self:GroupChannel()
-    if not channel or not SendAddonMessage then
-        Debug("not sent (no group channel): %s", msg)
-        return false
-    end
+local function Send(msg, channel, target)
+    if not SendAddonMessage then return false end
     local me = N.Me()
     if not me then Debug("not sent (own name unknown): %s", msg) return false end
     -- The sender writes its own character name into every message: the
     -- sender name WoW delivers is spelled differently on different clients.
-    local ok, result = pcall(SendAddonMessage, self.prefix, self.version .. "|" .. me .. "|" .. msg, channel)
+    local ok, result = pcall(SendAddonMessage, N.prefix, N.version .. "|" .. me .. "|" .. msg, channel, target)
     -- newer clients return a result code (0 = success), older ones true/nil
     local sent = ok and (result == nil or result == true or result == 0)
-    Debug("send %s %s -> %s", channel, msg, ok and tostring(result) or ("error: " .. tostring(result)))
-    if not sent and not self.warnedSend then
-        self.warnedSend = true
+    Debug("send %s%s %s -> %s", channel, target and (" " .. target) or "", msg,
+        ok and tostring(result) or ("error: " .. tostring(result)))
+    if not sent and not N.warnedSend then
+        N.warnedSend = true
         Print(L.sendFailed:format(tostring(result)))
     end
     return sent
+end
+
+-- One message to the whole group; does nothing outside a group.
+function N:Broadcast(msg)
+    local channel = self:GroupChannel()
+    if not channel then
+        Debug("not sent (no group channel): %s", msg)
+        return false
+    end
+    return Send(msg, channel)
+end
+
+-- To the group, and as a whisper to each of `names` the group channel does
+-- not reach (everybody when I am not in a group). Without a complete roster
+-- it cannot be told who is in the group: then everybody gets a whisper too and
+-- the receiver drops the second copy.
+local function SendToAll(msg, names)
+    local sent = N:Broadcast(msg)
+    local grouped = N:IsGrouped()
+    for _, name in ipairs(names) do
+        if not Same(name, N.Me()) and not (grouped and N:Resolve(name)) then
+            N.whispered[name:lower()] = GetTime()
+            sent = Send(msg, "WHISPER", name) or sent
+        end
+    end
+    return sent
+end
+
+-- A game message to all players of the current game (not those who quit).
+function N:GameBroadcast(msg)
+    local names, s = {}, G.state
+    if s and s.mode == "net" then
+        for _, p in ipairs(s.players) do
+            if not p.quit then names[#names + 1] = p.name end
+        end
+    end
+    return SendToAll(msg, names)
+end
+
+-- A lobby message from the host to the group and all lobby members.
+function N:LobbyBroadcast(msg)
+    return SendToAll(msg, self.lobby and self.lobby.members or {})
+end
+
+-- One game message to one player (whisper unless they are in my group).
+function N:SendTo(name, msg)
+    if self:IsGrouped() and self:Resolve(name) then return self:Broadcast(msg) end
+    N.whispered[name:lower()] = GetTime()
+    return Send(msg, "WHISPER", name)
+end
+
+-- Whispers to a player who is offline make the game print "No player named
+-- ... is currently playing." Hide that for players the addon just whispered.
+N.whispered = {}
+if ChatFrame_AddMessageEventFilter and ERR_CHAT_PLAYER_NOT_FOUND_S then
+    local pattern = "^" .. ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)") .. "$"
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
+        local name = type(msg) == "string" and msg:match(pattern)
+        name = name and N.Normalize(name)
+        local t = name and N.whispered[name:lower()]
+        return t ~= nil and GetTime() - t < 5
+    end)
 end
 
 local function GamePlayerNames()
@@ -217,7 +281,16 @@ local function Tick()
             Changed()
             return
         end
-        N:Broadcast("JOIN|" .. lb.gid)
+        if lb.byCode then
+            N:SendTo(lb.host, "CODEJOIN|" .. lb.pin)
+        else
+            N:Broadcast("JOIN|" .. lb.gid)
+        end
+    elseif GetTime() - (lb.heard or 0) > 30 then
+        -- the host repeats the member list every few seconds: it is gone
+        N.lobby = nil
+        Print(L.lobbyClosed)
+        Changed()
     end
 end
 
@@ -227,17 +300,54 @@ local function StartTicker()
     end
 end
 
+-- Group members see the lobby by themselves; everybody else joins with the
+-- lobby code "<host name>-<PIN>".
 function N:Host()
-    if not self:IsGrouped() then Print(L.notInGroup) return false end
+    local me = N.Me()
+    if not me then return false end
+    if G.state and G.state.mode == "net" and not G.state.finished then self:LeaveGame() end
+    if self.lobby then self:LeaveLobby() end
+    local pin = string.format("%04d", math.random(0, 9999))
+    self.lobby = {
+        gid = NewGameId(),
+        host = me,
+        isHost = true,
+        members = { me },
+        pin = pin,
+        code = me .. "-" .. pin,
+        failed = {},
+    }
+    self:Announce()
+    StartTicker()
+    Print(L.lobbyCodeInfo:format(self.lobby.code, self.lobby.code))
+    Changed()
+    return true
+end
+
+-- "Anna-4821", "anna 4821", "Anna#4821" -> "Anna", "4821"
+function N.ParseCode(code)
+    if type(code) ~= "string" then return nil end
+    local name, pin = code:match("^%s*(.-)[%s%-#]+(%d%d%d%d)%s*$")
+    name = N.Normalize(name)
+    if not name then return nil end
+    return name, pin
+end
+
+function N:JoinByCode(code)
+    local host, pin = N.ParseCode(code)
+    if not host then Print(L.badCodeFormat) return false end
+    if Same(host, N.Me()) then Print(L.ownCode) return false end
     if G.state and G.state.mode == "net" and not G.state.finished then self:LeaveGame() end
     if self.lobby then self:LeaveLobby() end
     self.lobby = {
-        gid = NewGameId(),
-        host = N.Me(),
-        isHost = true,
-        members = { N.Me() },
+        gid = nil, -- comes with the host's first member list
+        host = host,
+        isHost = false,
+        members = { host, N.Me() },
+        pin = pin,
+        byCode = true,
     }
-    self:Announce()
+    self:SendTo(host, "CODEJOIN|" .. pin)
     StartTicker()
     Changed()
     return true
@@ -271,14 +381,14 @@ end
 function N:BroadcastLobby()
     local lb = self.lobby
     if not lb or not lb.isHost then return end
-    self:Broadcast("LOBBYLIST|" .. lb.gid .. "|" .. table.concat(lb.members, ","))
+    self:LobbyBroadcast("LOBBYLIST|" .. lb.gid .. "|" .. table.concat(lb.members, ","))
 end
 
 function N:StartGame()
     local lb = self.lobby
     if not lb or not lb.isHost then return end
     if #lb.members < 2 then Print(L.needPlayers) return end
-    self:Broadcast("START|" .. lb.gid .. "|" .. table.concat(lb.members, ","))
+    self:LobbyBroadcast("START|" .. lb.gid .. "|" .. table.concat(lb.members, ","))
     self.lobby = nil
     G:Start({
         mode = "net", gameId = lb.gid, host = lb.host, localName = N.Me(),
@@ -289,7 +399,11 @@ end
 function N:LeaveLobby()
     local lb = self.lobby
     if not lb then return end
-    self:Broadcast((lb.isHost and "CLOSE|" or "LEAVE|") .. lb.gid)
+    if lb.isHost then
+        self:LobbyBroadcast("CLOSE|" .. lb.gid)
+    elseif lb.gid then
+        self:SendTo(lb.host, "LEAVE|" .. lb.gid)
+    end
     self.lobby = nil
     Changed()
 end
@@ -297,7 +411,7 @@ end
 function N:LeaveGame()
     local s = G.state
     if s and s.mode == "net" then
-        if not s.finished then self:Broadcast("LEAVE|" .. s.gameId) end
+        if not s.finished then self:GameBroadcast("LEAVE|" .. s.gameId) end
         G:End()
     end
 end
@@ -315,7 +429,7 @@ G:On(function(event, isLocal, p, cat, pts, dice, turn)
     if not isLocal or not s or s.mode ~= "net" then return end
     if event == "roll" then
         pendingHold = nil
-        N:Broadcast(("ROLL|%s|%d|%s|%s|%d"):format(
+        N:GameBroadcast(("ROLL|%s|%d|%s|%s|%d"):format(
             s.gameId, s.turn, R.EncodeDice(s.dice), G:HeldMask(), s.rollsLeft))
     elseif event == "hold" then
         -- coalesce fast clicking into one message
@@ -325,11 +439,11 @@ G:On(function(event, isLocal, p, cat, pts, dice, turn)
             local st = G.state
             if pendingHold ~= token or not st or st.mode ~= "net" or not G:IsLocalTurn() then return end
             pendingHold = nil
-            N:Broadcast(("HOLD|%s|%d|%s"):format(st.gameId, st.turn, G:HeldMask()))
+            N:GameBroadcast(("HOLD|%s|%d|%s"):format(st.gameId, st.turn, G:HeldMask()))
         end)
     elseif event == "score" then
         pendingHold = nil
-        N:Broadcast(("SCORE|%s|%d|%s|%s"):format(s.gameId, turn, cat, R.EncodeDice(dice)))
+        N:GameBroadcast(("SCORE|%s|%d|%s|%s"):format(s.gameId, turn, cat, R.EncodeDice(dice)))
     end
 end)
 
@@ -363,14 +477,12 @@ function handlers.LOBBY(sender, gid)
     Changed()
 end
 
-function handlers.JOIN(sender, gid)
-    local lb = N.lobby
-    if not lb or not lb.isHost or lb.gid ~= gid then return end
+local function AddMember(lb, sender)
     for _, n in ipairs(lb.members) do
         if Same(n, sender) then N:BroadcastLobby() return end
     end
     if #lb.members >= N.maxPlayers then
-        N:Broadcast("FULL|" .. gid .. "|" .. sender)
+        N:SendTo(sender, "FULL|" .. lb.gid .. "|" .. sender)
         return
     end
     lb.members[#lb.members + 1] = sender
@@ -379,9 +491,50 @@ function handlers.JOIN(sender, gid)
     Changed()
 end
 
-function handlers.FULL(sender, gid, target)
+function handlers.JOIN(sender, gid)
     local lb = N.lobby
-    if Same(target, N.Me()) and lb and not lb.isHost and lb.gid == gid and Same(lb.host, sender) then
+    if not lb or not lb.isHost or lb.gid ~= gid then return end
+    AddMember(lb, sender)
+end
+
+-- Joining with the lobby code (comes as a whisper, the sender is checked).
+local MAX_CODE_TRIES = 5
+function handlers.CODEJOIN(sender, pin)
+    local lb = N.lobby
+    if not lb or not lb.isHost then N:SendTo(sender, "BADCODE") return end
+    for _, n in ipairs(lb.members) do
+        if Same(n, sender) then N:BroadcastLobby() return end
+    end
+    if pin ~= lb.pin then
+        -- guessing: answer a few times, then stay silent
+        local key = sender:lower()
+        lb.failed[key] = (lb.failed[key] or 0) + 1
+        if lb.failed[key] <= MAX_CODE_TRIES then N:SendTo(sender, "BADCODE") end
+        return
+    end
+    AddMember(lb, sender)
+end
+
+-- The lobby I asked for with a code: gid is unknown until the host answers.
+local function MyLobbyFrom(sender, gid)
+    local lb = N.lobby
+    if not lb or lb.isHost or not Same(lb.host, sender) then return nil end
+    if lb.gid == gid then return lb end
+    if lb.byCode and not lb.gid and gid then return lb end
+end
+
+function handlers.BADCODE(sender)
+    local lb = N.lobby
+    if lb and not lb.isHost and lb.byCode and not lb.confirmed and Same(lb.host, sender) then
+        N.lobby = nil
+        Print(L.badCode)
+        Changed()
+    end
+end
+
+function handlers.FULL(sender, gid, target)
+    local lb = MyLobbyFrom(sender, gid)
+    if Same(target, N.Me()) and lb then
         N.lobby = nil
         Print(L.lobbyFull)
         Changed()
@@ -389,8 +542,9 @@ function handlers.FULL(sender, gid, target)
 end
 
 function handlers.LOBBYLIST(sender, gid, names)
-    local lb = N.lobby
-    if lb and not lb.isHost and lb.gid == gid and Same(lb.host, sender) then
+    local lb = MyLobbyFrom(sender, gid)
+    if lb then
+        lb.gid, lb.host, lb.heard = gid, sender, GetTime()
         lb.members = SplitNames(names)
         local stillIn = false
         for _, n in ipairs(lb.members) do if Same(n, N.Me()) then stillIn = true end end
@@ -406,8 +560,7 @@ end
 function handlers.CLOSE(sender, gid)
     local inv = N.invites[gid or ""]
     if inv and Same(inv.host, sender) then N.invites[gid] = nil end
-    local lb = N.lobby
-    if lb and lb.gid == gid and Same(lb.host, sender) then
+    if MyLobbyFrom(sender, gid) then
         N.lobby = nil
         Print(L.lobbyClosed)
     end
@@ -417,8 +570,7 @@ end
 function handlers.START(sender, gid, names)
     local inv = N.invites[gid or ""]
     if inv and Same(inv.host, sender) then N.invites[gid] = nil end
-    local lb = N.lobby
-    if not lb or lb.isHost or lb.gid ~= gid or not Same(lb.host, sender) then Changed() return end
+    if not MyLobbyFrom(sender, gid) then Changed() return end
     local players = SplitNames(names)
     local me, found = N.Me(), false
     for _, n in ipairs(players) do if Same(n, me) then found, me = true, n end end
@@ -534,26 +686,34 @@ end
 
 -- -- asking for the game
 
-function N:RequestSync(gid)
+-- target: ask that player directly (they may not be in my group); otherwise
+-- the game's players are asked.
+function N:RequestSync(gid, target)
     local now = GetTime()
     local want = self.syncWant
     if want and want.gid == gid and now - want.sent < 5 then return end
-    self.syncWant = { gid = gid, sent = now, tries = (want and want.gid == gid and want.tries or 0) + 1 }
+    target = target or (want and want.gid == gid and want.target) or nil
+    self.syncWant = { gid = gid, target = target, sent = now,
+        tries = (want and want.gid == gid and want.tries or 0) + 1 }
     Debug("sync request %s (try %d)", gid, self.syncWant.tries)
-    self:Broadcast("SYNCREQ|" .. gid)
+    if target then
+        self:SendTo(target, "SYNCREQ|" .. gid)
+    else
+        self:GameBroadcast("SYNCREQ|" .. gid)
+    end
 end
 
 -- -- answering
 
 local function SendSnapshot(s, target)
     local snap = G:Snapshot()
-    N:Broadcast(("SYNC|%s|%s|%d|%d|%s|%d|%s|%s|%d|%s"):format(snap.gameId, target, snap.turn, snap.current,
+    N:GameBroadcast(("SYNC|%s|%s|%d|%d|%s|%d|%s|%s|%d|%s"):format(snap.gameId, target, snap.turn, snap.current,
         snap.finished and "1" or "0", snap.rollsLeft, R.EncodeDice(snap.dice), snap.held, #snap.players,
         snap.host or ""))
     for i, sp in ipairs(snap.players) do
         local sc = {}
         for c = 1, #R.ALL do sc[c] = sp.scores[c] and tostring(sp.scores[c]) or "" end
-        N:Broadcast(("SYNCP|%s|%s|%d|%d|%s|%s|%s"):format(snap.gameId, target, snap.turn, i, sp.name,
+        N:GameBroadcast(("SYNCP|%s|%s|%d|%d|%s|%s|%s"):format(snap.gameId, target, snap.turn, i, sp.name,
             sp.quit and "2" or sp.left and "1" or "0", table.concat(sc, ",")))
     end
 end
@@ -660,10 +820,19 @@ end
 
 -- -- skipping players who are gone
 
-function handlers.ALIVE(sender, gid, turn)
+function handlers.ALIVE(sender, gid, turn, channel)
     local s = RunningNet(gid)
     turn = tonumber(turn)
-    if not s or not turn then return end
+    if not turn then return end
+    if not s then
+        -- Whispered by a player of a game I am not running (any more), e.g.
+        -- after a /reload outside the group: ask them for it.
+        local cur = G.state
+        if channel == "WHISPER" and not RunningNet() and not (cur and cur.mode == "net" and cur.gameId == gid) then
+            N:RequestSync(gid, sender)
+        end
+        return
+    end
     local p = G:FindPlayer(sender)
     if not p then return end
     -- Skipped, but still playing on their side: they are back.
@@ -691,12 +860,12 @@ end
 
 local function CheckMissing(s)
     if MyRank(s) ~= 1 then return end
-    local rosterOk = N:RosterComplete()
+    -- Leaving the group is fine (messages then go as whispers): only players
+    -- who are silent for too long are skipped.
     for _, p in ipairs(ActivePlayers(s)) do
         if not Same(p.name, N.Me()) then
-            local gone = SeenAgo(p.name) > KICK_AFTER or (rosterOk and not N:Resolve(p.name))
-            if gone and not p.left then
-                N:Broadcast(("KICK|%s|%d|%s"):format(s.gameId, s.turn, p.name))
+            if SeenAgo(p.name) > KICK_AFTER and not p.left then
+                N:GameBroadcast(("KICK|%s|%d|%s"):format(s.gameId, s.turn, p.name))
                 Print(L.playerSkipped:format(N.Short(p.name)))
                 G:RemovePlayer(p.name)
                 if not RunningNet(s.gameId) then return end
@@ -712,7 +881,7 @@ local function GameTick()
         local now = GetTime()
         if now - lastAlive >= ALIVE_EVERY then
             lastAlive = now
-            N:Broadcast(("ALIVE|%s|%d"):format(s.gameId, s.turn))
+            N:GameBroadcast(("ALIVE|%s|%d"):format(s.gameId, s.turn))
         end
         CheckMissing(s)
         Changed() -- away markers
@@ -723,7 +892,7 @@ local function GameTick()
             N.syncWant = nil
             if want.gid ~= "*" then Print(L.syncFailed) end
         else
-            N:RequestSync(want.gid)
+            N:RequestSync(want.gid, want.target)
         end
     end
 end
@@ -762,12 +931,21 @@ local function AddonVersion()
 end
 
 local GROUP_CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
+-- Commands that may come as a whisper: those of a running game.
+local WHISPER_COMMANDS = {
+    CODEJOIN = true, BADCODE = true, LOBBYLIST = true, FULL = true, CLOSE = true, START = true,
+    ROLL = true, HOLD = true, SCORE = true, LEAVE = true,
+    ALIVE = true, KICK = true, SYNCREQ = true, SYNC = true, SYNCP = true,
+}
+-- The same message can come twice: over the group channel and as a whisper.
+local lastMessage = {}
 
 function N:OnAddonMessage(prefix, text, channel, sender)
     if prefix ~= self.prefix then return end
     Debug("recv %s from %s: %s (me=%s, roster: %s)", tostring(channel), tostring(sender),
         tostring(text), tostring(N.Me()), RosterText())
-    if not text or not GROUP_CHANNELS[channel] then Debug("dropped: not a group channel") return end
+    local whisper = channel == "WHISPER"
+    if not text or not (GROUP_CHANNELS[channel] or whisper) then Debug("dropped: not a group channel") return end
     local parts = Split(text)
     -- "<version>|<name>|<command>|..." – only group members can send on a group
     -- channel, so the name is trusted; the roster just gives the usual spelling.
@@ -780,8 +958,18 @@ function N:OnAddonMessage(prefix, text, channel, sender)
         end
         return
     end
+    -- On a whisper, WoW's sender name is the real sender: the name written in
+    -- the message has to match it.
+    if whisper and not Same(N.Normalize(sender), name) then Debug("dropped: whisper name mismatch") return end
     sender = self:Resolve(name) or name
     if Same(sender, N.Me()) then return end
+    if whisper and not WHISPER_COMMANDS[parts[3]] then Debug("dropped: not a game command") return end
+    local key, last = sender:lower(), lastMessage[sender:lower()]
+    if last and last.text == text and last.channel ~= channel and GetTime() - last.at < 3 then
+        Debug("dropped: second copy")
+        return
+    end
+    lastMessage[key] = { text = text, channel = channel, at = GetTime() }
     Seen(sender)
     table.remove(parts, 1)
     table.remove(parts, 1)
@@ -796,27 +984,20 @@ function N:OnAddonMessage(prefix, text, channel, sender)
         return
     end
     local handler = handlers[parts[1]]
-    if handler then handler(sender, unpack(parts, 2)) end
+    if not handler then return end
+    if parts[1] == "ALIVE" then
+        handler(sender, parts[2], parts[3], channel)
+    else
+        handler(sender, unpack(parts, 2))
+    end
 end
 -- ---------------------------------------------------------------- roster changes
 
 local announceToken
 function N:CheckRoster()
-    -- I left the group: lobby and game are over for me.
+    -- Not in a group (any more): lobby and game go on as whispers.
     if not self:IsGrouped() then
         wipe(self.invites)
-        if self.lobby then self.lobby = nil end
-        -- Loading screens can report "no group" for a moment: only end the game
-        -- when it is still true a little later.
-        local s = RunningNet()
-        if s then
-            C_Timer.After(15, function()
-                if not self:IsGrouped() and RunningNet(s.gameId) then
-                    Print(L.leftGroup)
-                    G:End()
-                end
-            end)
-        end
         Changed()
         return
     end
@@ -830,9 +1011,11 @@ function N:CheckRoster()
     if lb then
         if lb.isHost then
             local changed = false
+            -- Members who leave the group stay (whispers); those who go offline
+            -- in the group are removed.
             for i = #lb.members, 1, -1 do
                 local n = lb.members[i]
-                if not Same(n, N.Me()) and (not self:InMyGroup(n) or not self:IsOnline(n)) then
+                if not Same(n, N.Me()) and self:Resolve(n) and not self:IsOnline(n) then
                     table.remove(lb.members, i)
                     changed = true
                 end
@@ -844,13 +1027,13 @@ function N:CheckRoster()
             C_Timer.After(1, function()
                 if announceToken == token then self:Announce() end
             end)
-        elseif not self:InMyGroup(lb.host) or not self:IsOnline(lb.host) then
+        elseif self:Resolve(lb.host) and not self:IsOnline(lb.host) then
             self.lobby = nil
             Print(L.lobbyClosed)
         end
     end
 
-    -- Players who left the group are skipped by the next game tick (CheckMissing).
+    -- Players who left the group keep playing (whispers), see GameBroadcast.
     Changed()
 end
 

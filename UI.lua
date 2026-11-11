@@ -521,23 +521,39 @@ function UI:CreateLobbyPanel(f)
         end
     end)
 
-    p.noGroup = Font(p, "GameFontRed")
-    p.noGroup:SetPoint("TOP", p.hostBtn, "BOTTOM", 0, -6)
-    p.noGroup:SetText(L.notInGroup)
+    -- join with a lobby code
+    p.codeHeader = Font(p, "GameFontNormal")
+    p.codeHeader:SetPoint("TOPLEFT", 24, -94)
+    p.codeHeader:SetText(L.codeHeader)
+    p.codeBox = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
+    p.codeBox:SetSize(170, 20)
+    p.codeBox:SetPoint("TOPLEFT", 38, -114)
+    p.codeBox:SetAutoFocus(false)
+    p.codeBox:SetMaxLetters(40)
+    local function JoinCode()
+        local code = p.codeBox:GetText()
+        p.codeBox:ClearFocus()
+        if N:JoinByCode(code) then p.codeBox:SetText("") end
+    end
+    p.codeBox:SetScript("OnEnterPressed", JoinCode)
+    p.codeBox:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+    p.codeBtn = Button(p, L.join, 100)
+    p.codeBtn:SetPoint("LEFT", p.codeBox, "RIGHT", 12, 0)
+    p.codeBtn:SetScript("OnClick", JoinCode)
 
     p.invHeader = Font(p, "GameFontNormal")
-    p.invHeader:SetPoint("TOPLEFT", 24, -112)
+    p.invHeader:SetPoint("TOPLEFT", 24, -152)
     p.invHeader:SetText(L.invites)
     p.inviteRows = {}
     for i = 1, 5 do
         local text = Font(p)
-        text:SetPoint("TOPLEFT", 32, -112 - i * 28)
+        text:SetPoint("TOPLEFT", 32, -152 - i * 26)
         local btn = Button(p, L.join, 100)
         btn:SetPoint("LEFT", text, "LEFT", 220, 0)
         p.inviteRows[i] = { text = text, btn = btn }
     end
     p.noInv = Font(p, "GameFontDisable")
-    p.noInv:SetPoint("TOPLEFT", 32, -140)
+    p.noInv:SetPoint("TOPLEFT", 32, -178)
     p.noInv:SetText(L.noInvites)
 
     -- lobby view
@@ -549,6 +565,29 @@ function UI:CreateLobbyPanel(f)
         m:SetPoint("TOPLEFT", 36, -58 - i * 22)
         p.members[i] = m
     end
+
+    -- the host's lobby code: in a box so it can be copied with Ctrl+C
+    p.myCodeLabel = Font(p, "GameFontNormal")
+    p.myCodeLabel:SetPoint("TOPLEFT", 240, -52)
+    p.myCodeLabel:SetText(L.codeLabel)
+    p.myCode = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
+    p.myCode:SetSize(150, 20)
+    p.myCode:SetPoint("TOPLEFT", 250, -70)
+    p.myCode:SetAutoFocus(false)
+    p.myCode:SetScript("OnEditFocusGained", function(box) box:HighlightText() end)
+    p.myCode:SetScript("OnEscapePressed", function(box) box:ClearFocus() end)
+    p.myCode:SetScript("OnEnterPressed", function(box) box:ClearFocus() end)
+    p.myCode:SetScript("OnTextChanged", function(box, user)
+        -- read-only: typing puts the code back
+        if user and N.lobby and N.lobby.code then
+            box:SetText(N.lobby.code)
+            box:HighlightText()
+        end
+    end)
+    p.myCodeHint = Font(p, "GameFontDisableSmall")
+    p.myCodeHint:SetPoint("TOPLEFT", 240, -96)
+    p.myCodeHint:SetPoint("RIGHT", p, "RIGHT", -24, 0)
+    p.myCodeHint:SetJustifyH("LEFT")
 
     p.waiting = Font(p, "GameFontNormal")
     p.waiting:SetPoint("TOPLEFT", 24, -226)
@@ -573,10 +612,10 @@ function UI:RefreshLobby()
     local lb = N.lobby
     local inLobby = lb ~= nil
 
-    local grouped = N:IsGrouped()
     p.hostBtn:SetShown(not inLobby)
-    p.hostBtn:SetEnabled(grouped)
-    p.noGroup:SetShown(not inLobby and not grouped)
+    p.codeHeader:SetShown(not inLobby)
+    p.codeBox:SetShown(not inLobby)
+    p.codeBtn:SetShown(not inLobby)
     p.invHeader:SetShown(not inLobby)
     local invList = {}
     if not inLobby then
@@ -601,6 +640,14 @@ function UI:RefreshLobby()
         if name then m:SetText(i .. ". " .. ShortName(name)) end
     end
     local isHost = inLobby and lb.isHost
+    local code = isHost and lb.code
+    p.myCodeLabel:SetShown(code and true or false)
+    p.myCode:SetShown(code and true or false)
+    p.myCodeHint:SetShown(code and true or false)
+    if code then
+        if p.myCode:GetText() ~= code then p.myCode:SetText(code) p.myCode:SetCursorPosition(0) end
+        p.myCodeHint:SetText(L.codeShare:format(code))
+    end
     p.startBtn:SetShown(isHost)
     p.leaveBtn:SetShown(inLobby)
     p.waiting:SetShown(inLobby and not isHost)

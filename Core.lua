@@ -62,7 +62,7 @@ end)
 SLASH_FOREVERDICEANDALE1 = "/diceale"
 SLASH_FOREVERDICEANDALE2 = "/dna"
 SlashCmdList.FOREVERDICEANDALE = function(input)
-    local cmd = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    local cmd, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
     cmd = (cmd or ""):lower()
     if cmd == "" then
         UI:Toggle()
@@ -71,6 +71,8 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
     elseif cmd == "host" then
         N:Host()
         UI:Show("lobby")
+    elseif cmd == "join" and rest and rest ~= "" then
+        if N:JoinByCode(rest) then UI:Show("lobby") end
     elseif cmd == "join" then
         local gid = N:LatestInvite()
         if not gid then ns.Print(L.noInviteOpen) return end

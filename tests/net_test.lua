@@ -1,7 +1,7 @@
 -- Offline multiplayer test: simulated WoW clients in one party exchange addon
 -- messages. Covers lobby, a full game, odd sender names, lost messages,
 -- /reload in the middle of a game, players who vanish and come back, and
--- players who leave on purpose.
+-- players who leave on purpose, and players who leave the group after the start.
 -- Run from the addon folder:  lua5.1 tests/net_test.lua .
 local dir = arg[1] or "."
 local fails = 0
@@ -16,7 +16,7 @@ local clients = {}
 -- ---------------------------------------------------------------- fake client
 
 local function NewClient(name, style)
-    local c = { name = name, frames = {}, printed = {}, style = style }
+    local c = { name = name, frames = {}, printed = {}, style = style, sent = {} }
     local env = setmetatable({}, { __index = _G })
     c.env = env
     env.UNKNOWNOBJECT = "Unknown"
@@ -54,10 +54,12 @@ local function NewClient(name, style)
     env.UnitIsConnected = function(unit) local o = unitClient(unit) return o and not o.dead end
     env.C_ChatInfo = {
         RegisterAddonMessagePrefix = function(p) c.prefix = p return true end,
-        SendAddonMessage = function(prefix, text, channel)
+        SendAddonMessage = function(prefix, text, channel, target)
             if c.gone or c.dead then return 0 end
+            if channel ~= "WHISPER" and not c.grouped then return 0 end
             if c.dropNext and text:find(c.dropNext, 1, true) then c.dropNext = nil return 0 end
-            wire[#wire + 1] = { prefix = prefix, text = text, channel = channel, from = c }
+            wire[#wire + 1] = { prefix = prefix, text = text, channel = channel, target = target, from = c }
+            c.sent[channel] = (c.sent[channel] or 0) + 1
             return 0
         end,
     }
@@ -113,8 +115,15 @@ local function Pump(seconds)
         while #wire > 0 do
             local m = table.remove(wire, 1)
             for _, c in ipairs(clients) do
-                if c.grouped and not c.dead and not c.gone and c.prefix == m.prefix then
-                    Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.senderName)
+                if not c.dead and not c.gone and c.prefix == m.prefix then
+                    if m.channel == "WHISPER" then
+                        -- whispers reach the named player, group or not
+                        if m.target:lower() == c.name:lower() then
+                            Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM)
+                        end
+                    elseif c.grouped then
+                        Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.senderName)
+                    end
                 end
             end
         end
@@ -161,7 +170,7 @@ local function Reload(i)
     return c
 end
 
-local function Alive(c) return not c.dead and not c.gone and c.grouped end
+local function Alive(c) return not c.dead and not c.gone end
 
 -- One move by whoever's client says it is their turn.
 local function Step()
@@ -349,6 +358,232 @@ do
     Fire(b, "GROUP_ROSTER_UPDATE")
     Pump(20)
     eq(b.ns.Game.state ~= nil, true, "hiccup: Bert's game survives a short group glitch")
+end
+
+-- ---------------------------------------------------------------- leaving the group after the start
+
+local function Ungroup(list)
+    for _, c in ipairs(list) do c.grouped = false end
+    for _, c in ipairs(clients) do Fire(c, "GROUP_ROSTER_UPDATE") end
+end
+
+do -- two players: the group falls apart, they keep playing together
+    Setup({ "Anna", "Bert" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 5 end)
+    Ungroup(clients)
+    Pump(90)
+    for _, c in ipairs(clients) do
+        eq(c.ns.Game.state.players[1].left or c.ns.Game.state.players[2].left, nil,
+            "split: nobody is skipped for " .. c.name)
+    end
+    eq(PlayUntil(AllFinished), true, "split: game ends")
+    SameResults("split", clients)
+    NoCheatMessages("split")
+end
+
+do -- three players: one leaves the group and still plays with the others
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
+    Ungroup({ clients[2] })
+    Pump(90)
+    eq(clients[1].ns.Game.state.players[2].left, nil, "groupleave: Bert still plays for Anna")
+    eq(clients[3].ns.Game.state.players[2].left, nil, "groupleave: Bert still plays for Cleo")
+    local whispersBefore = clients[1].sent.WHISPER or 0
+    eq(PlayUntil(AllFinished), true, "groupleave: game ends")
+    SameResults("groupleave", clients)
+    NoCheatMessages("groupleave")
+    eq((clients[1].sent.WHISPER or 0) > whispersBefore, true, "groupleave: Anna whispers Bert")
+end
+
+do -- the host leaves the group
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
+    Ungroup({ clients[1] })
+    eq(PlayUntil(AllFinished), true, "hostleave: game ends")
+    SameResults("hostleave", clients)
+end
+
+do -- /reload outside the group: the game comes back by whisper
+    Setup({ "Anna", "Bert" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
+    Ungroup(clients)
+    Pump(1)
+    local turn = clients[1].ns.Game.state.turn
+    clients[2].gone = true
+    local old = clients[2]
+    local c = NewClient(old.name, old.style)
+    c.grouped = false
+    clients[2] = c
+    Fire(c, "PLAYER_LOGIN")
+    Pump(20)
+    eq(c.ns.Game.state and c.ns.Game.state.turn, turn, "ungrouped reload: Bert has the game back")
+    eq(PlayUntil(AllFinished), true, "ungrouped reload: game ends")
+    SameResults("ungrouped reload", clients)
+end
+
+do -- a player outside the group who is gone for good is still skipped
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
+    Ungroup({ clients[2] })
+    clients[2].dead = true
+    Pump(90)
+    eq(clients[1].ns.Game.state.players[2].left, true, "gone: Bert skipped")
+    eq(PlayUntil(function() return Finished(clients[1]) and Finished(clients[3]) end), true, "gone: others finish")
+    SameResults("gone", { clients[1], clients[3] })
+end
+
+-- leaving on purpose outside the group still reaches the others
+do
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
+    Ungroup({ clients[2] })
+    clients[2].ns.Net:LeaveGame()
+    Pump(1)
+    eq(clients[1].ns.Game.state.players[2].quit, true, "quit outside: Anna sees Bert quit")
+    eq(clients[3].ns.Game.state.players[2].quit, true, "quit outside: Cleo sees Bert quit")
+end
+
+-- ---------------------------------------------------------------- lobby code (no group needed)
+
+local function Printed(c, text)
+    for _, msg in ipairs(c.printed) do if msg == text then return true end end
+    return false
+end
+
+-- grouped: list of true/false per player
+local function SetupClients(names, grouped)
+    clients, wire, timers = {}, {}, {}
+    for i, n in ipairs(names) do
+        local c = NewClient(n, "full")
+        c.grouped = grouped and grouped[i] or false
+        clients[#clients + 1] = c
+    end
+    for _, c in ipairs(clients) do Fire(c, "PLAYER_LOGIN") end
+    Pump(6)
+end
+
+do -- nobody in a group: join with the code, play a whole game
+    SetupClients({ "Anna", "Bert", "Cleo" })
+    local a = clients[1]
+    eq(a.ns.Net:Host(), true, "code: host without a group")
+    local code = a.ns.Net.lobby.code
+    eq(code:match("^Anna%-%d%d%d%d$") ~= nil, true, "code: looks like Anna-1234")
+    eq(clients[2].ns.Net:JoinByCode(code), true, "code: Bert joins")
+    eq(clients[3].ns.Net:JoinByCode(code:lower():gsub("%-", " ")), true, "code: Cleo joins with 'anna 1234'")
+    Pump(1)
+    eq(#a.ns.Net.lobby.members, 3, "code: host lobby complete")
+    eq(clients[2].ns.Net.lobby.confirmed, true, "code: Bert confirmed")
+    eq(clients[3].ns.Net.lobby.host, "Anna", "code: Cleo sees the host's spelling")
+    eq(clients[3].ns.Net.lobby.gid, a.ns.Net.lobby.gid, "code: Cleo knows the lobby id")
+    Pump(20) -- lobby stays open while the host repeats the list
+    eq(clients[2].ns.Net.lobby ~= nil, true, "code: lobby survives waiting")
+    a.ns.Net:StartGame()
+    Pump(1)
+    for _, c in ipairs(clients) do
+        eq(c.ns.Game.state and c.ns.Game.state.mode, "net", "code: " .. c.name .. " game started")
+    end
+    eq(PlayUntil(AllFinished), true, "code: game ends")
+    SameResults("code", clients)
+    NoCheatMessages("code")
+end
+
+do -- wrong code, own code, no lobby, garbage
+    SetupClients({ "Anna", "Bert" })
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    local pin = a.ns.Net.lobby.pin
+    local wrong = pin == "0000" and "1111" or "0000"
+    b.ns.Net:JoinByCode("Anna-" .. wrong)
+    Pump(1)
+    eq(b.ns.Net.lobby, nil, "badcode: Bert is told")
+    eq(Printed(b, b.ns.L.badCode), true, "badcode: message")
+    eq(#a.ns.Net.lobby.members, 1, "badcode: Bert not in the lobby")
+    eq(a.ns.Net:JoinByCode(a.ns.Net.lobby.code), false, "badcode: own code refused")
+    eq(b.ns.Net:JoinByCode("hello"), false, "badcode: not a code")
+    a.ns.Net:LeaveLobby()
+    Pump(1)
+    b.ns.Net:JoinByCode("Anna-" .. pin)
+    Pump(1)
+    eq(b.ns.Net.lobby, nil, "badcode: closed lobby answers too")
+    -- guessing: after a few wrong tries the host stays silent
+    a.ns.Net:Host()
+    pin = a.ns.Net.lobby.pin
+    wrong = pin == "0000" and "1111" or "0000"
+    for _ = 1, 6 do b.ns.Net:JoinByCode("Anna-" .. wrong) Pump(1) end
+    b.ns.Net:JoinByCode("Anna-" .. wrong)
+    Pump(1)
+    eq(b.ns.Net.lobby ~= nil, true, "badcode: no answer after too many tries")
+    Pump(30)
+    eq(b.ns.Net.lobby, nil, "badcode: gives up")
+end
+
+do -- host closes the lobby: code joiners hear it
+    SetupClients({ "Anna", "Bert" })
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(1)
+    a.ns.Net:LeaveLobby()
+    Pump(1)
+    eq(b.ns.Net.lobby, nil, "close: Bert's lobby is gone")
+    eq(Printed(b, b.ns.L.lobbyClosed), true, "close: message")
+end
+
+do -- code joiner leaves the lobby
+    SetupClients({ "Anna", "Bert" })
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(1)
+    b.ns.Net:LeaveLobby()
+    Pump(1)
+    eq(#a.ns.Net.lobby.members, 1, "codeleave: Bert removed")
+end
+
+do -- host vanishes: the code joiner's lobby closes after a while
+    SetupClients({ "Anna", "Bert" })
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(1)
+    a.dead = true
+    Pump(40)
+    eq(b.ns.Net.lobby, nil, "hostgone: lobby closed")
+end
+
+do -- mixed: Anna and Bert in a group, Cleo with the code
+    SetupClients({ "Anna", "Bert", "Cleo" }, { true, true, false })
+    local a = clients[1]
+    a.ns.Net:Host()
+    Pump()
+    eq(clients[2].popup ~= nil, true, "mixed: Bert sees the invitation")
+    eq(clients[3].popup, nil, "mixed: Cleo gets no invitation")
+    clients[2].ns.Net:Join(clients[2].popup)
+    clients[3].ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(1)
+    eq(#a.ns.Net.lobby.members, 3, "mixed: lobby complete")
+    eq(#clients[3].ns.Net.lobby.members, 3, "mixed: Cleo sees everybody")
+    a.ns.Net:StartGame()
+    Pump(1)
+    eq(PlayUntil(AllFinished), true, "mixed: game ends")
+    SameResults("mixed", clients)
+    NoCheatMessages("mixed")
+end
+
+do -- group member in the lobby leaves the group: stays in the lobby
+    SetupClients({ "Anna", "Bert" }, { true, true })
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    Pump()
+    b.ns.Net:Join(b.popup)
+    Pump(1)
+    Ungroup({ b })
+    Pump(10)
+    eq(#a.ns.Net.lobby.members, 2, "lobbyungroup: Bert still in Anna's lobby")
+    eq(b.ns.Net.lobby ~= nil, true, "lobbyungroup: Bert still has the lobby")
+    a.ns.Net:StartGame()
+    Pump(1)
+    eq(b.ns.Game.state and b.ns.Game.state.mode, "net", "lobbyungroup: Bert gets the start")
 end
 
 if fails > 0 then print(fails .. " FAILURES") os.exit(1) end

@@ -87,7 +87,12 @@ function G:HasRolled()
 end
 
 function G:CanRoll()
-    return self:IsLocalTurn() and self.state.rollsLeft > 0
+    if not self:IsLocalTurn() or self.state.rollsLeft <= 0 then return false end
+    -- with every die held there is nothing left to roll
+    for i = 1, 5 do
+        if not self.state.held[i] then return true end
+    end
+    return false
 end
 
 function G:Round()
