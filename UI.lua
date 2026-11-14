@@ -685,6 +685,10 @@ function UI:CreateResultsPanel(f)
             ns.StartSolo()
         end
     end)
+    -- multiplayer: the same players go on without a new lobby
+    p.againBtn = Button(p, L.playAgain, 150, 26)
+    p.againBtn:SetPoint("LEFT", p.newBtn, "RIGHT", 10, 0)
+    p.againBtn:SetScript("OnClick", function() N:PlayAgain() end)
     self.resultsPanel = p
 end
 
@@ -704,6 +708,10 @@ function UI:RefreshResults()
         end
     end
     p.summary:SetText(s and self:ResultText(s, ranking) or "")
+    local net = s and s.mode == "net"
+    p.newBtn:SetText(net and L.btnLeave or L.newGame)
+    p.againBtn:SetShown(net and true or false)
+    p.againBtn:SetEnabled(N:CanPlayAgain())
 end
 
 function UI:ResultText(s, ranking)

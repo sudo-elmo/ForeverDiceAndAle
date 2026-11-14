@@ -61,6 +61,10 @@ local en = {
 
     results = "Results",
     newGame = "New game",
+    playAgain = "Play again",
+    rematchAsked = "Asked %s for another round.",
+    rematchWanted = "%s wants another round – click \"Play again\".",
+    rematchNobody = "Nobody is left for another round – open a new lobby.",
     close = "Close",
     left = "(left)",
 
@@ -169,6 +173,10 @@ local de = {
 
     results = "Ergebnis",
     newGame = "Neues Spiel",
+    playAgain = "Nochmal spielen",
+    rematchAsked = "%s wurde gefragt, ob ihr noch eine Runde spielt.",
+    rematchWanted = "%s möchte noch eine Runde – klicke auf „Nochmal spielen“.",
+    rematchNobody = "Für eine weitere Runde ist niemand mehr da – eröffne eine neue Lobby.",
     close = "Schließen",
     left = "(weg)",
 

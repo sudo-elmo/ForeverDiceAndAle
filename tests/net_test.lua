@@ -149,7 +149,9 @@ local function Pump(seconds)
                 if not c.dead and not c.gone and c.prefix == m.prefix then
                     if m.channel == "CHANNEL" then
                         -- everybody else in that channel, group or not
-                        if c ~= m.from and not dropChannels and env_InChannel(c, m.chan) then
+                        local dropIt = c.dropIncoming and m.text:find(c.dropIncoming, 1, true)
+                        if dropIt then c.dropIncoming = nil end
+                        if c ~= m.from and not dropChannels and not dropIt and env_InChannel(c, m.chan) then
                             local id = env_InChannel(c, m.chan)
                             if chanStyle == "spacerealm" then
                                 -- what Forever really sends: "Name Realm", with a space
@@ -648,8 +650,10 @@ do -- invited in the group, then the group falls apart: the channel carries ever
     SameResults("channel", clients)
     NoCheatMessages("channel")
     Pump(70)
-    eq(a.ns.Net.chan, nil, "channel: Anna left the channel after the game")
-    eq(#b.chanList, 0, "channel: Bert left the channel after the game")
+    eq(a.ns.Net.chan ~= nil, true, "channel: kept on the results screen")
+    Pump(600)
+    eq(a.ns.Net.chan, nil, "channel: Anna left the channel 10 minutes after the game")
+    eq(#b.chanList, 0, "channel: Bert left the channel 10 minutes after the game")
 end
 
 do -- join with the code, nobody in a group, a whole game
@@ -752,6 +756,74 @@ do -- channel messages silently dropped: joining gives up with a hint, in a grou
     eq(Printed(b, "Anna did not answer"), true, "dropped: Bert gets the hint")
     eq(b.ns.Net.chan, nil, "dropped: Bert left the channel")
     dropChannels = false
+end
+
+do -- play again: the host starts the next round, same players, same channel
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    local a, b, c = clients[1], clients[2], clients[3]
+    eq(PlayUntil(AllFinished), true, "again: first game ends")
+    local chan, old = a.ns.Net.chan.name, a.ns.Game.state.gameId
+    Pump(30) -- results screen: nobody is shown as away
+    eq(a.ns.Net:CanPlayAgain(), true, "again: button enabled")
+    b.ns.Net:PlayAgain() -- Bert is not the leader: asks Anna
+    Pump(1)
+    eq(Printed(a, "Bert wants another round"), true, "again: Anna told that Bert wants to")
+    eq(b.ns.Game.state.gameId, old, "again: Bert's click does not start anything")
+    a.ns.Net:PlayAgain()
+    Pump(1)
+    for _, cl in ipairs(clients) do
+        local st = cl.ns.Game.state
+        eq(st and st.gameId ~= old and not st.finished, true, "again: " .. cl.name .. " in the new round")
+        eq(st and #st.players, 3, "again: " .. cl.name .. " has all three players")
+        eq(cl.ns.Net.chan and cl.ns.Net.chan.name, chan, "again: " .. cl.name .. " same channel")
+    end
+    Ungroup(clients)
+    eq(PlayUntil(AllFinished), true, "again: second game ends without a group")
+    SameResults("again", clients)
+    NoCheatMessages("again")
+end
+
+do -- play again: whoever closed the results is left out
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    local a, b, c = clients[1], clients[2], clients[3]
+    eq(PlayUntil(AllFinished), true, "again2: first game ends")
+    c.ns.Game:End() -- Cleo closes the results ("Leave")
+    Pump(1)
+    eq(#c.chanList, 0, "again2: Cleo left the channel")
+    a.ns.Net:PlayAgain()
+    Pump(1)
+    eq(#a.ns.Game.state.players, 2, "again2: only Anna and Bert")
+    eq(b.ns.Game.state.finished, false, "again2: Bert in the new round")
+    eq(c.ns.Game.state, nil, "again2: Cleo not pulled in")
+    eq(PlayUntil(function() return Finished(a) and Finished(b) end), true, "again2: game ends")
+    eq(Printed(c, "Could not get"), false, "again2: no error for Cleo")
+end
+
+do -- play again: the host is gone, the next player starts
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    local a, b, c = clients[1], clients[2], clients[3]
+    eq(PlayUntil(AllFinished), true, "again3: first game ends")
+    a.dead = true
+    Pump(40) -- Anna is away now
+    eq(b.ns.Net:RematchLeader(b.ns.Game.state), "Bert", "again3: Bert leads")
+    b.ns.Net:PlayAgain()
+    Pump(1)
+    eq(#b.ns.Game.state.players, 2, "again3: Bert and Cleo")
+    eq(c.ns.Game.state.finished, false, "again3: Cleo in the new round")
+    eq(PlayUntil(function() return Finished(b) and Finished(c) end), true, "again3: game ends")
+end
+
+do -- play again: Bert missed the REMATCH message and catches up
+    Setup({ "Anna", "Bert" }, "full")
+    local a, b = clients[1], clients[2]
+    eq(PlayUntil(AllFinished), true, "again4: first game ends")
+    Pump(10)
+    b.dropIncoming = "REMATCH"
+    a.ns.Net:PlayAgain()
+    Pump(30)
+    eq(b.ns.Game.state.gameId, a.ns.Game.state.gameId, "again4: Bert caught up with the new round")
+    eq(PlayUntil(AllFinished), true, "again4: game ends")
+    SameResults("again4", clients)
 end
 
 if fails > 0 then print(fails .. " FAILURES") os.exit(1) end

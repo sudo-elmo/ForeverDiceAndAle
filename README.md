@@ -54,7 +54,7 @@ Everyone needs the addon. There are two ways to get into a game:
 
 Both ways work at the same time: group members see the lobby by themselves, everyone else uses the code. Lobby codes only work between players on the same realm and faction.
 
-Once you are in the lobby, nobody has to stay in the group. If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
+After a game, **Play again** starts the next round with the same players – no new lobby needed. Once you are in the lobby, nobody has to stay in the group. If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
 
 ## Settings
 

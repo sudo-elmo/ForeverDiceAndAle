@@ -21,14 +21,16 @@
 --   ROLL|gid|turn|dice|held|left active : dice after a roll
 --   HOLD|gid|turn|held           active : held dice changed
 --   SCORE|gid|turn|cat|dice      active : box chosen (receivers recompute points)
---   LEAVE|gid                    any    : player left lobby / game
+--   LEAVE|gid                    any    : player left lobby / game (or closed the results)
+--   REMATCH|old|gid|n1,n2,...    leader : next round with these players, same channel
+--   AGAIN|gid                    player : asks the leader for another round
 --   HELLO                        host   : test message on a new lobby channel
 local _, ns = ...
 local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
     prefix = "FDiceAle",
-    version = "8",
+    version = "9",
     maxPlayers = 6,
     lobby = nil,   -- { gid, host, isHost, members = { names } }
     invites = {},  -- gid -> { host, chan, time }
@@ -721,11 +723,79 @@ function handlers.LEAVE(sender, gid)
     local s = G.state
     if s and s.mode == "net" and s.gameId == gid then
         for _, p in ipairs(s.players) do
-            if Same(p.name, sender) and not p.left then
+            if Same(p.name, sender) and s.finished and not p.quit then
+                p.quit = true -- closed the results: not in the next round
+                Print(L.playerLeft:format(N.Short(sender)))
+                Changed()
+            elseif Same(p.name, sender) and not p.left then
                 Print(L.playerLeft:format(N.Short(sender)))
                 G:RemovePlayer(p.name, true)
             end
         end
+    end
+end
+
+-- ---------------------------------------------------------------- play again
+-- After a game the same players can go on in the same channel: the leader
+-- (the host, or the first player still around) starts the next round.
+
+local function Present(p)
+    return not p.quit and (Same(p.name, N.Me()) or not N:IsAway(p.name))
+end
+
+function N:RematchPlayers(s)
+    local t = {}
+    for _, p in ipairs(s.players) do if Present(p) then t[#t + 1] = p.name end end
+    return t
+end
+
+function N:RematchLeader(s)
+    for _, p in ipairs(s.players) do
+        if Same(p.name, s.host) and Present(p) then return p.name end
+    end
+    for _, p in ipairs(s.players) do
+        if Present(p) then return p.name end
+    end
+end
+
+function N:CanPlayAgain()
+    local s = G.state
+    return s and s.mode == "net" and s.finished and self.chan ~= nil and #self:RematchPlayers(s) >= 2 or false
+end
+
+function N:PlayAgain()
+    local s = G.state
+    if not (s and s.mode == "net" and s.finished) then return end
+    local players = self:RematchPlayers(s)
+    if not self.chan or #players < 2 then Print(L.rematchNobody) return end
+    local leader = self:RematchLeader(s)
+    if Same(leader, N.Me()) then
+        local gid = NewGameId()
+        SendChannel(("REMATCH|%s|%s|%s"):format(s.gameId, gid, table.concat(players, ",")))
+        G:Start({ mode = "net", gameId = gid, host = N.Me(), localName = N.Me(), players = players })
+        if ns.UI then ns.UI:Show() end
+    else
+        SendChannel("AGAIN|" .. s.gameId)
+        Print(L.rematchAsked:format(N.Short(leader)))
+    end
+end
+
+function handlers.REMATCH(sender, oldGid, gid, names)
+    local s = G.state
+    if N.lobby or not gid or not (s and s.mode == "net" and s.finished and s.gameId == oldGid) then return end
+    if not G:FindPlayer(sender) then return end
+    local players = SplitNames(names)
+    local me, found = N.Me(), false
+    for _, n in ipairs(players) do if Same(n, me) then found, me = true, n end end
+    if not found or #players < 2 then return end
+    G:Start({ mode = "net", gameId = gid, host = sender, localName = me, players = players })
+    if ns.UI then ns.UI:Show() end
+end
+
+function handlers.AGAIN(sender, gid)
+    local s = G.state
+    if s and s.mode == "net" and s.finished and s.gameId == gid and Same(N:RematchLeader(s), N.Me()) then
+        Print(L.rematchWanted:format(N.Short(sender)))
     end
 end
 
@@ -809,13 +879,13 @@ end
 -- -- asking for the game
 
 -- target: the player that should answer first; everybody in the channel hears it.
-function N:RequestSync(gid, target)
+function N:RequestSync(gid, target, quiet)
     self:StartGameTicker() -- it repeats the request; after /reload nothing else starts it
     local now = GetTime()
     local want = self.syncWant
     if want and want.gid == gid and now - want.sent < 5 then return end
     target = target or (want and want.gid == gid and want.target) or nil
-    self.syncWant = { gid = gid, target = target, sent = now,
+    self.syncWant = { gid = gid, target = target, sent = now, quiet = quiet or (want and want.gid == gid and want.quiet),
         tries = (want and want.gid == gid and want.tries or 0) + 1 }
     Debug("sync request %s (try %d)", gid, self.syncWant.tries)
     if target then
@@ -950,7 +1020,10 @@ function handlers.ALIVE(sender, gid, turn)
         -- A player of a game I am not running (any more), e.g. after a
         -- /reload: ask them for it.
         local cur = G.state
-        if not RunningNet() and not (cur and cur.mode == "net" and cur.gameId == gid) then
+        if cur and cur.mode == "net" and cur.finished and cur.gameId ~= gid then
+            -- maybe I missed the start of the next round: ask, but quietly
+            N:RequestSync(gid, sender, true)
+        elseif not RunningNet() and not (cur and cur.mode == "net" and cur.gameId == gid) then
             N:RequestSync(gid, sender)
         end
         return
@@ -996,28 +1069,37 @@ local function CheckMissing(s)
 end
 
 local gameTicker, lastAlive = nil, 0
+local RESULTS_KEEP = 600 -- seconds the channel stays open on the results screen
 local function GameTick()
     local s = RunningNet()
-    if s then
+    local cur = G.state
+    local results = cur and cur.mode == "net" and cur.finished and N.chan and cur or nil
+    if results and GetTime() - (results.finishedAt or 0) > RESULTS_KEEP then
+        N:LeaveChannel() -- nobody wanted another round
+        results = nil
+    end
+    local alive = s or results
+    if alive then
+        -- also on the results screen: shows who is still there for another round
         local now = GetTime()
         if now - lastAlive >= ALIVE_EVERY then
             lastAlive = now
-            N:GameBroadcast(("ALIVE|%s|%d"):format(s.gameId, s.turn))
+            N:GameBroadcast(("ALIVE|%s|%d"):format(alive.gameId, alive.turn))
         end
-        CheckMissing(s)
+        if s then CheckMissing(s) end
         Changed() -- away markers
     end
     local want = N.syncWant
     if want and GetTime() - want.sent >= 5 then
         if want.tries >= 3 then
             N.syncWant = nil
-            if want.gid ~= "*" then
+            if want.gid ~= "*" and not want.quiet then
                 Print(L.syncFailed)
             elseif not G.state and not N.lobby then
                 N:LeaveChannel() -- nothing to come back to
             end
         else
-            N:RequestSync(want.gid, want.target)
+            N:RequestSync(want.gid, want.target, want.quiet)
         end
     end
 end
@@ -1030,17 +1112,13 @@ end
 
 G:On(function(event, closed)
     local s = G.state
-    if event == "closed" and closed and closed.mode == "net" and not N.lobby then
-        N:LeaveChannel()
-    elseif event == "finished" and s and s.mode == "net" and C_Timer then
-        -- the others may still need the last moves: keep the channel a while
-        local gid = s.gameId
-        C_Timer.After(60, function()
-            local st = G.state
-            if not N.lobby and not (st and st.mode == "net" and st.gameId == gid and not st.finished) then
-                N:LeaveChannel()
-            end
-        end)
+    if event == "closed" and closed and closed.mode == "net" then
+        -- closing the results: the others leave me out of the next round
+        if closed.finished then SendChannel("LEAVE|" .. closed.gameId) end
+        if not N.lobby then N:LeaveChannel() end
+    elseif event == "finished" and s and s.mode == "net" then
+        -- the channel stays open for another round, see GameTick
+        s.finishedAt = GetTime()
     end
     if (event == "start" or event == "sync") and s and s.mode == "net" then
         for _, p in ipairs(s.players) do Seen(p.name) end
