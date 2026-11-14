@@ -4,6 +4,8 @@
 
 - Joining with a lobby code no longer shows you in the lobby before the host has let you in. Until then the lobby says "Connecting to …". If the host does not answer, you get a message that explains what to try (check the code, or join through a group).
 - New: while you are in a group, the addon checks whether its hidden addon whispers get through to the other players. Lobby codes and playing on without a group need these whispers. If they do not get through, you get a message right away telling you to stay in the group, and another one if you leave it anyway.
+- Fixed: after a lobby ended, its player names stayed in the Multiplayer window on top of "Join with a lobby code".
+- The Multiplayer and results windows are no longer see-through, so the score sheet behind them does not shine through.
 - Everyone needs 1.0.6 – it does not play together with older versions.
 
 ## 1.0.5

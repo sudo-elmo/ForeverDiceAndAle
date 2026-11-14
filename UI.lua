@@ -494,6 +494,10 @@ local function CreatePanel(f)
     panel:EnableMouse(true)
     SetBackdrop(panel, "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
         "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", 24, 6, 32)
+    -- the dialog background is see-through: keep the score sheet from showing
+    local back = Solid(panel, "BACKGROUND", { 0.05, 0.04, 0.03 }, 0.94, -8)
+    back:SetPoint("TOPLEFT", 6, -6)
+    back:SetPoint("BOTTOMRIGHT", -6, 6)
     panel.title = Font(panel, "GameFontNormalLarge")
     panel.title:SetPoint("TOP", 0, -16)
     local rule = Solid(panel, "ARTWORK", { 1, 0.82, 0 }, 0.45)
@@ -637,7 +641,7 @@ function UI:RefreshLobby()
     -- Joining: nobody is "in" until the host's member list confirms it.
     local pending = inLobby and not lb.isHost and not lb.confirmed
     for i, m in ipairs(p.members) do
-        local name = inLobby and not pending and lb.members[i]
+        local name = inLobby and not pending and lb.members[i] or nil
         m:SetShown(name ~= nil)
         if name then m:SetText(i .. ". " .. ShortName(name)) end
     end
