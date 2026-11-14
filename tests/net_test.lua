@@ -114,7 +114,7 @@ local function NewClient(name, style)
     end
     local ns = { db = {} } -- SavedVariables survive a /reload, see Reload
     c.ns = ns
-    ns.Print = function(msg) c.printed[#c.printed + 1] = msg if os.getenv("DBG") and msg:find("debug") then print(name, msg) end end
+    ns.Print = function(msg) c.printed[#c.printed + 1] = msg end
     for _, file in ipairs({ "Locales.lua", "Rules.lua", "Game.lua", "Net.lua" }) do
         local chunk = assert(loadfile(dir .. "/" .. file))
         setfenv(chunk, env)
@@ -673,13 +673,11 @@ for _, style in ipairs({ "spacerealm", "number", "nosender" }) do -- other clien
     chanStyle = style
     SetupClients({ "Anna", "Bert" })
     local a, b = clients[1], clients[2]
-    if os.getenv("DBG") then a.ns.Net.debug = true b.ns.Net.debug = true end
     a.ns.Net:Host()
     Pump(5)
     b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
     Pump(10)
     eq(#a.ns.Net.lobby.members, 2, style .. ": Bert joined with the code")
-    eq(a.ns.Net.diag.got > 0, true, style .. ": Anna counted channel messages")
     a.ns.Net:StartGame()
     Pump(1)
     eq(PlayUntil(AllFinished), true, style .. ": game ends")

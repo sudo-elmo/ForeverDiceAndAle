@@ -6,7 +6,6 @@
 - You can leave the group at any time, even mid-game.
 - After `/reload` or relogging, a running game comes back by itself.
 - Joining shows "Connecting to …" until the host lets you in, and tells you what to check if nobody answers.
-- New command `/dna status` to help with multiplayer problems.
 - Fixed old player names showing in the Multiplayer window, and windows being see-through.
 - Everyone needs 1.1.0.
 

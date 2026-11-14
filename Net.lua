@@ -255,12 +255,6 @@ function N:OnChannelNotice(_, _, _, channelName, _, _, _, _, baseName)
     end
 end
 
-function N:Status()
-    local d, c = self.diag, self.chan
-    Print(L.status:format(c and c.name or "-", tostring(ChanId() or "-"), d.sent, tostring(d.result), d.noId,
-        d.got, d.otherChan, d.badName, self.channelsBlocked and "1" or "0"))
-end
-
 function N:LeaveChannel()
     local c = self.chan
     self.chan = nil
@@ -279,19 +273,11 @@ local function ChannelsBlocked()
     Changed()
 end
 
--- Counters for "/dna status" and the no-answer message: what happened on the
--- lobby channel, without the debug mode.
-N.diag = { sent = 0, noId = 0, result = nil, got = 0, otherChan = 0, badName = 0 }
-
 -- One message to everybody in the lobby channel.
 local function SendChannel(msg)
     local id = ChanId()
-    if not id then
-        if N.chan then N.diag.noId = N.diag.noId + 1 end
-        return false
-    end
+    if not id then return false end
     local sent, result = Send(msg, "CHANNEL", tostring(id))
-    N.diag.sent, N.diag.result = N.diag.sent + 1, result
     -- 4 = InvalidChatType: chat channels are not allowed for addon messages
     if not sent and (result == 4 or result == false) then ChannelsBlocked() end
     return sent
@@ -377,7 +363,6 @@ local function Tick()
             N.lobby = nil
             N:LeaveChannel()
             Print((lb.byCode and L.joinNoAnswerCode or L.joinNoAnswer):format(N.Short(lb.host)))
-            N:Status()
             Changed()
             return
         end
@@ -1099,9 +1084,7 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, cha
         tostring(text), tostring(N.Me()), RosterText())
     if channel == "CHANNEL" then
         -- only my own lobby channel counts
-        Debug("channel args: target=%s localID=%s name=%s", tostring(target), tostring(localID), tostring(chanName))
         if not self:IsMyChannel(target, localID, chanName) then
-            self.diag.otherChan = self.diag.otherChan + 1
             Debug("dropped: other channel")
             return
         end
@@ -1126,14 +1109,12 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, cha
     -- On the channel anybody can write: WoW's sender name is the real sender,
     -- the name written in the message has to match it.
     if onChannel and not Same(N.Normalize(sender), name) then
-        self.diag.badName = self.diag.badName + 1
         Debug("dropped: name mismatch (%s / %s)", tostring(sender), tostring(name))
         return
     end
     sender = self:Resolve(name) or name
     if Same(sender, N.Me()) then return end
     if onChannel then
-        self.diag.got = self.diag.got + 1
         if parts[3] == "LOBBY" then return end
     elseif not GROUP_COMMANDS[parts[3]] then
         Debug("dropped: only the invitation goes over the group")
