@@ -1,44 +1,41 @@
 # Changelog
 
-## 1.0.8
+## 1.1.0
 
-- Multiplayer now runs only over the lobby's hidden chat channel, however you joined – with the group invitation or with the lobby code. Hidden addon whispers are no longer used, and the group only carries the invitation. So the group can be left at any time, and everybody plays the same way.
-- Fixed the reason why joining with a code ended with "did not answer" in 1.0.7: on chat channels the game names the sender as "Name Realm" (with a space instead of a hyphen). The addon took that for a fake sender and threw every channel message away.
-- The host's addon also recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender).
-- The lobby channel is now also hidden from the chat windows once the server has put you into it.
-- After a `/reload` or logging in again, the addon keeps asking in the lobby channel for the running game instead of asking only once.
-- Invitations disappear by themselves when the host stops repeating them (lobby closed or game started).
-- If the server does not allow addon messages in chat channels, you get a clear message instead of a lobby that never fills.
-- The "addon whispers do not get through" check from 1.0.6 is gone – there are no whispers any more.
-- New command `/dna status`: shows what happened on the lobby channel (sent, received, thrown away). When joining fails, this line is shown by itself – please send it along when reporting a problem.
-- Everyone needs 1.0.8 – it does not play together with older versions.
+Multiplayer has been rebuilt so that lobby codes and playing without a group really work on Forever.
 
-## 1.0.7
+**Multiplayer over a lobby channel**
 
-- Lobby codes and playing on without a group work again on servers that drop hidden addon whispers (like Forever). Every lobby now gets a hidden chat channel. Everyone in the lobby joins it automatically, and players outside the group get lobby and game messages there. The channel does not show up in your chat.
-- After a `/reload` outside the group, the game comes back over that channel.
-- If the server does not allow addon messages in chat channels either, the addon notices it, hides the lobby code and tells you to play in a group.
-- A wrong lobby code no longer throws out other players who are joining the same lobby.
-- Everyone needs 1.0.7 – it does not play together with older versions.
+- Every lobby now has its own hidden chat channel, and all lobby and game messages go through it – whether you joined with the group invitation or with a lobby code. The group only carries the invitation. In 1.0.5 these messages went as hidden addon whispers, which Forever does not deliver, so joining with a code and playing on after leaving the group did not work.
+- The group can be left at any time, before or during the game, and everybody keeps playing.
+- The channel does not show up in your chat windows, and its join and leave notices are hidden. The addon leaves it a minute after the game ends, or right away when you close the game.
+- After a `/reload` or logging in again, the running game is fetched over the channel, in a group or not.
+- Invitations disappear by themselves once the lobby is closed or the game has started.
+- If a server does not allow addon messages in chat channels, the addon says so instead of showing a lobby that never fills.
 
-## 1.0.6
+**Joining**
 
-- Joining with a lobby code no longer shows you in the lobby before the host has let you in. Until then the lobby says "Connecting to …". If the host does not answer, you get a message that explains what to try (check the code, or join through a group).
-- New: while you are in a group, the addon checks whether its hidden addon whispers get through to the other players. Lobby codes and playing on without a group need these whispers. If they do not get through, you get a message right away telling you to stay in the group, and another one if you leave it anyway.
-- Fixed: after a lobby ended, its player names stayed in the Multiplayer window on top of "Join with a lobby code".
+- When you join, the lobby says "Connecting to …" until the host has let you in. Before, you saw yourself in the lobby although the host never got your request.
+- If the host does not answer (for example because of a wrong code), you get a message after about half a minute that says what to check.
+- New command `/dna status`: shows what happened on the lobby channel (messages sent, received and thrown away). When joining fails, this line is shown by itself – please send it along when you report a problem.
+
+**Fixes**
+
+- After a lobby ended, its player names stayed in the Multiplayer window on top of "Join with a lobby code".
 - The Multiplayer and results windows are no longer see-through, so the score sheet behind them does not shine through.
-- Everyone needs 1.0.6 – it does not play together with older versions.
+
+Everyone needs 1.1.0 – it does not play together with 1.0.x.
 
 ## 1.0.5
 
-- New: start a multiplayer game without a group. When you host a game you get a lobby code like `Anna-4821`. Share it, and the others join under Multiplayer → "Join with a lobby code" or with `/dna join Anna-4821`. Group members still get the invitation as before, both work at the same time. Lobby codes work between players on the same realm and faction.
-- Nobody has to stay in the group any more: once the lobby is open or the game is running, you can leave the group and everybody keeps playing together.
+- New: start a multiplayer game without a group. When you host a game you get a lobby code like `Anna-4821`. Share it, and the others join under Multiplayer → "Join with a lobby code" or with `/dna join Anna-4821`. Group members still get the invitation as before, both work at the same time. Lobby codes work between players on the same realm and faction. (On Forever lobby codes only work from 1.1.0 on.)
+- Nobody has to stay in the group any more: once the lobby is open or the game is running, you can leave the group and everybody keeps playing together. (On Forever this only works from 1.1.0 on.)
 - If all five dice are held, the Roll button is disabled – there is nothing left to roll.
 - Fixed a broken symbol in the tooltip of the "Show invitation popup" setting.
 
 ## 1.0.4
 
-- The settings gear (and `/diceale options`) no longer locks up the screen when used in combat. The game does not allow opening the settings in combat; you now get the usual "not possible in combat" message instead, and everything stays clickable.
+- The settings gear (and `/diceale options`) no longer locks up the screen in combat. The game does not allow opening the settings in combat, so you now get the usual "not possible in combat" message, and everything stays clickable.
 
 ## 1.0.3
 
