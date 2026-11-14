@@ -1,17 +1,12 @@
 # Changelog
 
-## 1.2.0
-
-- New "Play again" button after a multiplayer game: the same players start the next round right away, no new lobby needed. The host starts it, the others can ask for it. If the host is gone, the next player takes over.
-- Closing the results ("Leave") takes you out of the next round.
-- Everyone needs 1.2.0.
-
 ## 1.1.0
 
 - Lobby codes and playing without a group now work on Forever: each lobby gets its own hidden chat channel for all multiplayer messages.
 - You can leave the group at any time, even mid-game.
 - After `/reload` or relogging, a running game comes back by itself.
 - Joining shows "Connecting to …" until the host lets you in, and tells you what to check if nobody answers.
+- New "Play again" button after a multiplayer game: the same players start the next round right away, no new lobby needed.
 - Fixed old player names showing in the Multiplayer window, and windows being see-through.
 - Everyone needs 1.1.0.
 
