@@ -623,8 +623,7 @@ function UI:RefreshLobby()
     p.invHeader:SetShown(not inLobby)
     local invList = {}
     if not inLobby then
-        for gid, inv in pairs(N.invites) do invList[#invList + 1] = { gid = gid, inv = inv } end
-        table.sort(invList, function(a, b) return a.inv.time > b.inv.time end)
+        invList = N:OpenInvites()
     end
     for i, row in ipairs(p.inviteRows) do
         local e = invList[i]

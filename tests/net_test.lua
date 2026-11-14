@@ -64,7 +64,12 @@ local function NewClient(name, style)
                 c.sent.CHANNEL = (c.sent.CHANNEL or 0) + 1
                 return 0
             end
-            if channel ~= "WHISPER" and not c.grouped then return 0 end
+            if channel == "WHISPER" then
+                fails = fails + 1
+                print("FAIL", "whisper sent by " .. c.name, text)
+                return 0
+            end
+            if not c.grouped then return 0 end
             if c.dropNext and text:find(c.dropNext, 1, true) then c.dropNext = nil return 0 end
             wire[#wire + 1] = { prefix = prefix, text = text, channel = channel, target = target, from = c }
             c.sent[channel] = (c.sent[channel] or 0) + 1
@@ -107,7 +112,7 @@ local function NewClient(name, style)
         c.frames[#c.frames + 1] = f
         return f
     end
-    local ns = {}
+    local ns = { db = {} } -- SavedVariables survive a /reload, see Reload
     c.ns = ns
     ns.Print = function(msg) c.printed[#c.printed + 1] = msg if os.getenv("DBG") and msg:find("debug") then print(name, msg) end end
     for _, file in ipairs({ "Locales.lua", "Rules.lua", "Game.lua", "Net.lua" }) do
@@ -156,11 +161,6 @@ local function Pump(seconds)
                                     id .. ". " .. m.chan, 0, id, m.chan)
                             end
                         end
-                    elseif m.channel == "WHISPER" then
-                        -- whispers reach the named player, group or not
-                        if m.target:lower() == c.name:lower() and not c.noWhisper and not m.from.noWhisper then
-                            Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM)
-                        end
                     elseif c.grouped then
                         Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.senderName)
                     end
@@ -190,8 +190,8 @@ local function Setup(names, style)
         local c = clients[i]
         eq(c.popup ~= nil, true, style .. ": " .. c.name .. " sees the invitation")
         c.ns.Net:Join(c.popup)
+        Pump(2) -- one after the other: seat order = join order
     end
-    Pump(1)
     eq(#host.ns.Net.lobby.members, #clients, style .. ": host lobby complete")
     host.ns.Net:StartGame()
     Pump(1)
@@ -205,6 +205,9 @@ local function Reload(i)
     local old = clients[i]
     old.gone = true
     local c = NewClient(old.name, old.style)
+    c.grouped = old.grouped
+    c.chanList = old.chanList -- still in the channel after /reload
+    c.ns.db = old.ns.db       -- SavedVariables
     clients[i] = c
     Fire(c, "PLAYER_LOGIN")
     return c
@@ -428,11 +431,12 @@ do -- three players: one leaves the group and still plays with the others
     Pump(90)
     eq(clients[1].ns.Game.state.players[2].left, nil, "groupleave: Bert still plays for Anna")
     eq(clients[3].ns.Game.state.players[2].left, nil, "groupleave: Bert still plays for Cleo")
-    local whispersBefore = clients[1].sent.WHISPER or 0
+    local channelBefore = clients[1].sent.CHANNEL or 0
     eq(PlayUntil(AllFinished), true, "groupleave: game ends")
     SameResults("groupleave", clients)
     NoCheatMessages("groupleave")
-    eq((clients[1].sent.WHISPER or 0) > whispersBefore, true, "groupleave: Anna whispers Bert")
+    eq((clients[1].sent.CHANNEL or 0) > channelBefore, true, "groupleave: Anna sends on the channel")
+    eq(clients[1].sent.WHISPER, nil, "groupleave: no whispers at all")
 end
 
 do -- the host leaves the group
@@ -443,7 +447,7 @@ do -- the host leaves the group
     SameResults("hostleave", clients)
 end
 
-do -- /reload outside the group: the game comes back by whisper
+do -- /reload outside the group: the game comes back over the channel
     Setup({ "Anna", "Bert" }, "full")
     PlayUntil(function() return clients[1].ns.Game.state.turn >= 4 end)
     Ungroup(clients)
@@ -453,6 +457,7 @@ do -- /reload outside the group: the game comes back by whisper
     local old = clients[2]
     local c = NewClient(old.name, old.style)
     c.grouped = false
+    c.chanList, c.ns.db = old.chanList, old.ns.db
     clients[2] = c
     Fire(c, "PLAYER_LOGIN")
     Pump(20)
@@ -486,7 +491,7 @@ end
 -- ---------------------------------------------------------------- lobby code (no group needed)
 
 local function Printed(c, text)
-    for _, msg in ipairs(c.printed) do if msg == text then return true end end
+    for _, msg in ipairs(c.printed) do if msg:find(text, 1, true) then return true end end
     return false
 end
 
@@ -510,7 +515,7 @@ do -- nobody in a group: join with the code, play a whole game
     eq(code:match("^Anna%-%d%d%d%d$") ~= nil, true, "code: looks like Anna-1234")
     eq(clients[2].ns.Net:JoinByCode(code), true, "code: Bert joins")
     eq(clients[3].ns.Net:JoinByCode(code:lower():gsub("%-", " ")), true, "code: Cleo joins with 'anna 1234'")
-    Pump(1)
+    Pump(2)
     eq(#a.ns.Net.lobby.members, 3, "code: host lobby complete")
     eq(clients[2].ns.Net.lobby.confirmed, true, "code: Bert confirmed")
     eq(clients[3].ns.Net.lobby.host, "Anna", "code: Cleo sees the host's spelling")
@@ -533,28 +538,22 @@ do -- wrong code, own code, no lobby, garbage
     a.ns.Net:Host()
     local pin = a.ns.Net.lobby.pin
     local wrong = pin == "0000" and "1111" or "0000"
+    -- a wrong PIN is a different channel: nobody answers there
     b.ns.Net:JoinByCode("Anna-" .. wrong)
-    Pump(1)
-    eq(b.ns.Net.lobby, nil, "badcode: Bert is told")
-    eq(Printed(b, b.ns.L.badCode), true, "badcode: message")
+    Pump(35)
+    eq(b.ns.Net.lobby, nil, "badcode: Bert gives up")
+    eq(Printed(b, "Anna did not answer. Check the code"), true, "badcode: message")
     eq(#a.ns.Net.lobby.members, 1, "badcode: Bert not in the lobby")
+    eq(b.ns.Net.chan, nil, "badcode: Bert left the wrong channel")
     eq(a.ns.Net:JoinByCode(a.ns.Net.lobby.code), false, "badcode: own code refused")
     eq(b.ns.Net:JoinByCode("hello"), false, "badcode: not a code")
     a.ns.Net:LeaveLobby()
     Pump(1)
+    b.printed = {}
     b.ns.Net:JoinByCode("Anna-" .. pin)
-    Pump(1)
-    eq(b.ns.Net.lobby, nil, "badcode: closed lobby answers too")
-    -- guessing: after a few wrong tries the host stays silent
-    a.ns.Net:Host()
-    pin = a.ns.Net.lobby.pin
-    wrong = pin == "0000" and "1111" or "0000"
-    for _ = 1, 6 do b.ns.Net:JoinByCode("Anna-" .. wrong) Pump(1) end
-    b.ns.Net:JoinByCode("Anna-" .. wrong)
-    Pump(1)
-    eq(b.ns.Net.lobby ~= nil, true, "badcode: no answer after too many tries")
-    Pump(30)
-    eq(b.ns.Net.lobby, nil, "badcode: gives up")
+    Pump(35)
+    eq(b.ns.Net.lobby, nil, "badcode: closed lobby: Bert gives up")
+    eq(Printed(b, "Anna did not answer"), true, "badcode: closed lobby: message")
 end
 
 do -- host closes the lobby: code joiners hear it
@@ -562,7 +561,7 @@ do -- host closes the lobby: code joiners hear it
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
     b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
-    Pump(1)
+    Pump(2)
     a.ns.Net:LeaveLobby()
     Pump(1)
     eq(b.ns.Net.lobby, nil, "close: Bert's lobby is gone")
@@ -574,7 +573,7 @@ do -- code joiner leaves the lobby
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
     b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
-    Pump(1)
+    Pump(2)
     b.ns.Net:LeaveLobby()
     Pump(1)
     eq(#a.ns.Net.lobby.members, 1, "codeleave: Bert removed")
@@ -585,7 +584,7 @@ do -- host vanishes: the code joiner's lobby closes after a while
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
     b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
-    Pump(1)
+    Pump(2)
     a.dead = true
     Pump(40)
     eq(b.ns.Net.lobby, nil, "hostgone: lobby closed")
@@ -600,7 +599,7 @@ do -- mixed: Anna and Bert in a group, Cleo with the code
     eq(clients[3].popup, nil, "mixed: Cleo gets no invitation")
     clients[2].ns.Net:Join(clients[2].popup)
     clients[3].ns.Net:JoinByCode(a.ns.Net.lobby.code)
-    Pump(1)
+    Pump(2)
     eq(#a.ns.Net.lobby.members, 3, "mixed: lobby complete")
     eq(#clients[3].ns.Net.lobby.members, 3, "mixed: Cleo sees everybody")
     a.ns.Net:StartGame()
@@ -626,35 +625,14 @@ do -- group member in the lobby leaves the group: stays in the lobby
     eq(b.ns.Game.state and b.ns.Game.state.mode, "net", "lobbyungroup: Bert gets the start")
 end
 
-local function Printed(c, text)
-    for _, m in ipairs(c.printed) do if m:find(text, 1, true) then return true end end
-    return false
-end
-
-do -- whispers get through: no warning
-    Setup({ "Anna", "Bert", "Cleo" }, "full")
-    Pump(15)
-    for _, c in ipairs(clients) do
-        eq(Printed(c, "do not get through"), false, "probe ok: no warning for " .. c.name)
-        for _, o in ipairs(clients) do
-            if o ~= c then eq(c.ns.Net.reachOK[o.name:lower()], true, "probe ok: " .. c.name .. " -> " .. o.name) end
-        end
-    end
-end
-
-local function NoWhispers() for _, c in ipairs(clients) do c.noWhisper = true end end
-
-do -- Forever: whispers are dropped, the lobby channel carries everything
+do -- invited in the group, then the group falls apart: the channel carries everything
     SetupClients({ "Anna", "Bert" }, { true, true })
-    NoWhispers()
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
     Pump()
     b.ns.Net:Join(b.popup)
-    Pump(15)
-    eq(Printed(a, "cannot reach"), false, "channel: Anna not warned")
-    eq(Printed(b, "cannot reach"), false, "channel: Bert not warned")
-    eq(a.ns.Net.reachOK.bert, true, "channel: Anna reaches Bert")
+    Pump(5)
+    eq(#a.ns.Net.lobby.members, 2, "channel: Bert in the lobby")
     eq(b.ns.Net.chan and b.ns.Net.chan.name, a.ns.Net.chan.name, "channel: Bert in Anna's channel")
     a.ns.Net:StartGame()
     Pump(1)
@@ -670,9 +648,8 @@ do -- Forever: whispers are dropped, the lobby channel carries everything
     eq(#b.chanList, 0, "channel: Bert left the channel after the game")
 end
 
-do -- Forever: join with the code, nobody in a group, a whole game
+do -- join with the code, nobody in a group, a whole game
     SetupClients({ "Anna", "Bert", "Cleo" })
-    NoWhispers()
     local a = clients[1]
     a.ns.Net:Host()
     Pump(5)
@@ -691,7 +668,6 @@ end
 for _, style in ipairs({ "number", "nosender" }) do -- other clients describe the channel differently
     chanStyle = style
     SetupClients({ "Anna", "Bert" })
-    NoWhispers()
     local a, b = clients[1], clients[2]
     if os.getenv("DBG") then a.ns.Net.debug = true b.ns.Net.debug = true end
     a.ns.Net:Host()
@@ -707,9 +683,8 @@ for _, style in ipairs({ "number", "nosender" }) do -- other clients describe th
     chanStyle = nil
 end
 
-do -- Forever: wrong PIN only bothers the one who typed it
+do -- wrong PIN only bothers the one who typed it
     SetupClients({ "Anna", "Bert", "Cleo" })
-    NoWhispers()
     local a, b, c = clients[1], clients[2], clients[3]
     a.ns.Net:Host()
     Pump(5)
@@ -724,7 +699,6 @@ end
 
 do -- /reload outside the group: the game comes back over the channel
     SetupClients({ "Anna", "Bert" })
-    NoWhispers()
     local a = clients[1]
     a.ns.Net:Host()
     Pump(5)
@@ -737,7 +711,7 @@ do -- /reload outside the group: the game comes back over the channel
     local old = clients[2]
     old.gone = true
     local nc = NewClient(old.name, old.style)
-    nc.grouped, nc.noWhisper = false, true
+    nc.grouped = false
     nc.chanList = old.chanList -- still in the channel after /reload
     nc.ns.db = { channel = old.ns.db and old.ns.db.channel or old.ns.Net.chan.name }
     clients[2] = nc
@@ -747,34 +721,28 @@ do -- /reload outside the group: the game comes back over the channel
     eq(PlayUntil(AllFinished), true, "channel reload: game ends")
 end
 
-do -- channel addon messages refused: warned in the group, codes hidden
+do -- channel addon messages refused: no multiplayer, and the players are told
     SetupClients({ "Anna", "Bert" }, { true, true })
-    NoWhispers()
     for _, c in ipairs(clients) do c.noChannel = true end
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
-    Pump()
-    b.ns.Net:Join(b.popup)
-    Pump(15)
-    eq(Printed(a, "cannot reach Bert"), true, "refused: Anna warned")
-    eq(Printed(b, "cannot reach Anna"), true, "refused: Bert warned")
-    eq(a.ns.Net.lobby.code, nil, "refused: no lobby code shown")
-    eq(Printed(a, "lobby codes do not work"), true, "refused: Anna told why")
-    a.ns.Net:StartGame()
-    Pump(1)
-    Ungroup({ b })
-    Pump(1)
-    eq(Printed(b, "Invite each other to a group again"), true, "refused: Bert told after leaving the group")
+    Pump(5)
+    eq(a.ns.Net.lobby, nil, "refused: lobby closed again")
+    eq(Printed(a, "multiplayer does not work here"), true, "refused: Anna told why")
+    eq(a.ns.Net:Host(), false, "refused: no new lobby")
+    b.ns.Net:JoinByCode("Anna-1234")
+    Pump(5)
+    eq(Printed(b, "multiplayer does not work here"), true, "refused: Bert told why")
+    eq(b.ns.Net.lobby, nil, "refused: Bert not waiting")
 end
 
-do -- channel messages silently dropped: code join gives up with a hint
-    SetupClients({ "Anna", "Bert" }, { false, false })
-    NoWhispers()
+do -- channel messages silently dropped: joining gives up with a hint, in a group too
+    SetupClients({ "Anna", "Bert" }, { true, true })
     dropChannels = true
     local a, b = clients[1], clients[2]
     a.ns.Net:Host()
     Pump()
-    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    b.ns.Net:Join(b.popup)
     Pump(10)
     eq(b.ns.Net.lobby and b.ns.Net.lobby.confirmed, nil, "dropped: Bert not confirmed")
     Pump(30)

@@ -2,11 +2,15 @@
 
 ## 1.0.8
 
-- Lobby codes: the host's addon now recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender). In 1.0.7 messages on the channel could be thrown away, so joining with a code ended with "did not answer".
+- Multiplayer now runs only over the lobby's hidden chat channel, however you joined – with the group invitation or with the lobby code. Hidden addon whispers are no longer used, and the group only carries the invitation. So the group can be left at any time, and everybody plays the same way.
+- The host's addon recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender). In 1.0.7 messages on the channel could be thrown away, so joining with a code ended with "did not answer".
 - The lobby channel is now also hidden from the chat windows once the server has put you into it.
-- Messages that arrive twice (over the group and the lobby channel) are now always recognised as copies, even when other messages arrive in between. Before, dice could briefly jump back to an older roll.
-- After logging in again outside the group, the addon keeps asking for the running game instead of asking only once.
-- New command `/dna status`: shows what happened on the lobby channel (sent, received, thrown away). When joining with a code fails, this line is shown by itself – please send it along when reporting a problem.
+- After a `/reload` or logging in again, the addon keeps asking in the lobby channel for the running game instead of asking only once.
+- Invitations disappear by themselves when the host stops repeating them (lobby closed or game started).
+- If the server does not allow addon messages in chat channels, you get a clear message instead of a lobby that never fills.
+- The "addon whispers do not get through" check from 1.0.6 is gone – there are no whispers any more.
+- New command `/dna status`: shows what happened on the lobby channel (sent, received, thrown away). When joining fails, this line is shown by itself – please send it along when reporting a problem.
+- Everyone needs 1.0.8 – it does not play together with older versions.
 
 ## 1.0.7
 
