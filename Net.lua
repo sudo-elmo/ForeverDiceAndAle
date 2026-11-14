@@ -228,6 +228,40 @@ function N:JoinChannel(name)
     if ns.db then ns.db.channel = name end
 end
 
+-- Is this CHAT_MSG_ADDON from my lobby channel? Clients differ in what they
+-- put into target (with or without the number) and the channel name argument.
+function N:IsMyChannel(target, localID, chanName)
+    local c = self.chan
+    if not c then return false end
+    local id = ChanId()
+    for _, v in pairs({ chanName or false, target or false }) do
+        if type(v) == "string" and v ~= "" then
+            local n = v:gsub("^%d+%.%s*", ""):gsub("%s.*$", "")
+            if n:lower() == c.name:lower() then return true end
+            if id and tonumber(v) == id then return true end
+        end
+    end
+    return id ~= nil and tonumber(localID) == id
+end
+
+-- Hide the channel in the chat windows once the server has put me in.
+function N:OnChannelNotice(_, _, _, channelName, _, _, _, _, baseName)
+    local c = self.chan
+    if not c then return end
+    for _, v in pairs({ baseName or false, channelName or false }) do
+        if type(v) == "string" then
+            local n = v:gsub("^%d+%.%s*", "")
+            if n:lower() == c.name:lower() then HideChannel(n) return end
+        end
+    end
+end
+
+function N:Status()
+    local d, c = self.diag, self.chan
+    Print(L.status:format(c and c.name or "-", tostring(ChanId() or "-"), d.sent, tostring(d.result), d.noId,
+        d.got, d.otherChan, d.badName, self.channelsBlocked and "1" or "0"))
+end
+
 function N:LeaveChannel()
     local c = self.chan
     self.chan = nil
@@ -254,10 +288,18 @@ local function ChannelsBlocked()
 end
 
 -- One message to everybody in the lobby channel.
+-- Counters for "/dna status" and the no-answer message: what happened on the
+-- lobby channel, without the debug mode.
+N.diag = { sent = 0, noId = 0, result = nil, got = 0, otherChan = 0, badName = 0 }
+
 local function SendChannel(msg)
     local id = ChanId()
-    if not id then return false end
+    if not id then
+        if N.chan then N.diag.noId = N.diag.noId + 1 end
+        return false
+    end
     local sent, result = Send(msg, "CHANNEL", tostring(id))
+    N.diag.sent, N.diag.result = N.diag.sent + 1, result
     -- 4 = InvalidChatType: chat channels are not allowed for addon messages
     if not sent and (result == 4 or result == false) then ChannelsBlocked() end
     return sent
@@ -446,6 +488,7 @@ local function Tick()
             if lb.byCode then N:LeaveChannel() end
             if lb.byCode then
                 Print(L.joinNoAnswerCode:format(N.Short(lb.host)))
+                N:Status()
             else
                 Print(L.joinNoAnswer)
             end
@@ -1161,15 +1204,24 @@ local WHISPER_COMMANDS = {
 -- The same message can come twice: over the group channel and as a whisper.
 local lastMessage = {}
 
-function N:OnAddonMessage(prefix, text, channel, sender, target, _, _, chanName)
+local function parts2name(text)
+    return (text or ""):match("^[^|]*|([^|]*)|")
+end
+
+function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, chanName)
     if prefix ~= self.prefix then return end
     Debug("recv %s from %s: %s (me=%s, roster: %s)", tostring(channel), tostring(sender),
         tostring(text), tostring(N.Me()), RosterText())
     if channel == "CHANNEL" then
         -- only my own lobby channel counts
-        local n = type(chanName) == "string" and chanName ~= "" and chanName
-            or (type(target) == "string" and target:gsub("^%d+%.%s*", "")) or ""
-        if not (self.chan and n:lower() == self.chan.name:lower()) then Debug("dropped: other channel") return end
+        Debug("channel args: target=%s localID=%s name=%s", tostring(target), tostring(localID), tostring(chanName))
+        if not self:IsMyChannel(target, localID, chanName) then
+            self.diag.otherChan = self.diag.otherChan + 1
+            Debug("dropped: other channel")
+            return
+        end
+        -- some clients leave the sender out on channels: the name in the message counts then
+        if not N.Normalize(sender) then sender = parts2name(text) end
     end
     -- whispers and the lobby channel: the sender is checked like a whisper
     local whisper = channel == "WHISPER" or channel == "CHANNEL"
@@ -1188,7 +1240,12 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, _, chanName)
     end
     -- On a whisper, WoW's sender name is the real sender: the name written in
     -- the message has to match it.
-    if whisper and not Same(N.Normalize(sender), name) then Debug("dropped: whisper name mismatch") return end
+    if whisper and not Same(N.Normalize(sender), name) then
+        if channel == "CHANNEL" then self.diag.badName = self.diag.badName + 1 end
+        Debug("dropped: whisper name mismatch (%s / %s)", tostring(sender), tostring(name))
+        return
+    end
+    if channel == "CHANNEL" then self.diag.got = self.diag.got + 1 end
     sender = self:Resolve(name) or name
     if Same(sender, N.Me()) then return end
     if whisper and not WHISPER_COMMANDS[parts[3]] then Debug("dropped: not a game command") return end
@@ -1291,9 +1348,12 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("CHAT_MSG_ADDON")
 ev:RegisterEvent("GROUP_ROSTER_UPDATE")
 ev:RegisterEvent("UNIT_CONNECTION")
+ev:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 ev:SetScript("OnEvent", function(_, event, ...)
     if event == "CHAT_MSG_ADDON" then
         N:OnAddonMessage(...)
+    elseif event == "CHAT_MSG_CHANNEL_NOTICE" then
+        N:OnChannelNotice(...)
     elseif event == "PLAYER_LOGIN" then
         RegisterMyPrefix()
         C_Timer.After(5, function() N:AskForRunningGame() end)

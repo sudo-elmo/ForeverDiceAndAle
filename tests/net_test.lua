@@ -109,7 +109,7 @@ local function NewClient(name, style)
     end
     local ns = {}
     c.ns = ns
-    ns.Print = function(msg) c.printed[#c.printed + 1] = msg end
+    ns.Print = function(msg) c.printed[#c.printed + 1] = msg if os.getenv("DBG") and msg:find("debug") then print(name, msg) end end
     for _, file in ipairs({ "Locales.lua", "Rules.lua", "Game.lua", "Net.lua" }) do
         local chunk = assert(loadfile(dir .. "/" .. file))
         setfenv(chunk, env)
@@ -129,6 +129,7 @@ local function Fire(c, event, ...)
     end
 end
 
+chanStyle = nil -- how CHAT_MSG_ADDON describes the channel
 local dropChannels = false -- the server silently drops channel addon messages
 function env_InChannel(c, name)
     for i, n in ipairs(c.chanList) do if n:lower() == name:lower() then return i + 4 end end
@@ -145,8 +146,15 @@ local function Pump(seconds)
                         -- everybody else in that channel, group or not
                         if c ~= m.from and not dropChannels and env_InChannel(c, m.chan) then
                             local id = env_InChannel(c, m.chan)
-                            Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM,
-                                id .. ". " .. m.chan, 0, id, m.chan)
+                            if chanStyle == "number" then
+                                Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM,
+                                    tostring(id), 0, id, "")
+                            elseif chanStyle == "nosender" then
+                                Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, "", m.chan:upper(), 0, 0, nil)
+                            else
+                                Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM,
+                                    id .. ". " .. m.chan, 0, id, m.chan)
+                            end
                         end
                     elseif m.channel == "WHISPER" then
                         -- whispers reach the named player, group or not
@@ -678,6 +686,25 @@ do -- Forever: join with the code, nobody in a group, a whole game
     eq(PlayUntil(AllFinished), true, "channel code: game ends")
     SameResults("channel code", clients)
     NoCheatMessages("channel code")
+end
+
+for _, style in ipairs({ "number", "nosender" }) do -- other clients describe the channel differently
+    chanStyle = style
+    SetupClients({ "Anna", "Bert" })
+    NoWhispers()
+    local a, b = clients[1], clients[2]
+    if os.getenv("DBG") then a.ns.Net.debug = true b.ns.Net.debug = true end
+    a.ns.Net:Host()
+    Pump(5)
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(10)
+    eq(#a.ns.Net.lobby.members, 2, style .. ": Bert joined with the code")
+    eq(a.ns.Net.diag.got > 0, true, style .. ": Anna counted channel messages")
+    a.ns.Net:StartGame()
+    Pump(1)
+    eq(PlayUntil(AllFinished), true, style .. ": game ends")
+    SameResults(style, clients)
+    chanStyle = nil
 end
 
 do -- Forever: wrong PIN only bothers the one who typed it

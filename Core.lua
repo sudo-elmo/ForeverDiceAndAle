@@ -87,6 +87,8 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
         N.debug = not N.debug
         ns.Print(N.debug and L.debugOn or L.debugOff)
     --@end-debug@
+    elseif cmd == "status" then
+        N:Status()
     elseif cmd == "options" or cmd == "settings" or cmd == "config" then
         ns.OpenOptions()
     elseif cmd == "leave" then

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8
+
+- Lobby codes: the host's addon now recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender). In 1.0.7 messages on the channel could be thrown away, so joining with a code ended with "did not answer".
+- The lobby channel is now also hidden from the chat windows once the server has put you into it.
+- New command `/dna status`: shows what happened on the lobby channel (sent, received, thrown away). When joining with a code fails, this line is shown by itself – please send it along when reporting a problem.
+
 ## 1.0.7
 
 - Lobby codes and playing on without a group work again on servers that drop hidden addon whispers (like Forever). Every lobby now gets a hidden chat channel. Everyone in the lobby joins it automatically, and players outside the group get lobby and game messages there. The channel does not show up in your chat.
