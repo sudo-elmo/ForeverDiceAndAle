@@ -12,7 +12,7 @@ The classic five-dice game for **World of Warcraft: Forever**. Play alone while 
 
 - The well-known five-dice game with five dice, three rolls per turn and 13 boxes to fill
 - **Solo mode** – an unfinished game is saved and continues after `/reload` or logging out
-- **Multiplayer for 2 to 6 players** – with your group or with a lobby code, everyone sees every roll live
+- **Multiplayer for 2 to 6 players** – with your group or with a lobby code, everyone sees every roll live, and **Play again** starts the next round right away
 - Classic look: parchment score sheet, stone dice tray and the familiar dialog frame
 - Click a box to see what it scores. Possible points are shown in green before you choose.
 - English and German in game (follows your game language)
@@ -52,9 +52,13 @@ Everyone needs the addon. There are two ways to get into a game:
 3. The others enter it under **Multiplayer → Join with a lobby code**, or type `/dna join Anna-4821`.
 4. The host clicks **Start game**.
 
-Both ways work at the same time: group members see the lobby by themselves, everyone else uses the code. Lobby codes only work between players on the same realm and faction.
+Both ways work at the same time. Lobby codes work between players on the same realm and faction.
 
-After a game, **Play again** starts the next round with the same players – no new lobby needed. Once you are in the lobby, nobody has to stay in the group. If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
+**During and after the game**
+
+- You can leave the group at any time, even in the middle of a game – everybody keeps playing.
+- If someone leaves the game, the others play on. Players who disconnect or `/reload` get the game back by themselves. Anyone gone for more than a minute is skipped and joins in again when they are back.
+- After the game, **Play again** starts the next round with the same players – no new lobby needed. The host starts it, the others can ask for it. **Leave** takes you out of the next round.
 
 ## Settings
 
@@ -89,13 +93,13 @@ You can also open the window from the addon compartment menu (the button next to
 
 ## How multiplayer works
 
-There is no extra server. Every lobby gets a hidden chat channel, and all lobby and game messages go there as small hidden addon messages – however you joined. Your party or raid only gets the invitation, so group members see the lobby by themselves. The channel does not show up in your chat. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
+There is no extra server. Every lobby gets its own hidden chat channel, and all lobby and game messages go through it as small hidden addon messages – however you joined. Your party or raid only gets the invitation. The channel does not show up in your chat, and the addon leaves it when you are done.
 
-A lobby code is the host's name plus a four-digit PIN. The channel's name is made from the host's name and the PIN, so joining with a code puts you into the right channel; a wrong code leads to an empty channel and ends with "did not answer". Channels only reach players on your own realm and faction. If the server does not allow addon messages in chat channels, multiplayer does not work, and the addon tells you so.
+The channel's name is made from the host's name and the PIN of the lobby code, so the code leads you straight into the right channel. A wrong code leads to an empty channel, and after half a minute you are told to check it.
 
-The active player rolls on their own computer. The other clients only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
+Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same. The active player rolls on their own computer. The others only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
 
-Every client sends a short "still here" message every 10 seconds. If a client notices it is behind, or comes back after a reload, it asks the other players for the current game and gets a copy from one of them.
+Every client sends a short "still here" message every 10 seconds. If a client notices it is behind, or comes back after a reload, it asks the others for the current game and gets a copy from one of them.
 
 ## Made with AI
 
