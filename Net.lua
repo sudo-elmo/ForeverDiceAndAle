@@ -287,11 +287,11 @@ local function ChannelsBlocked()
     Changed()
 end
 
--- One message to everybody in the lobby channel.
 -- Counters for "/dna status" and the no-answer message: what happened on the
 -- lobby channel, without the debug mode.
 N.diag = { sent = 0, noId = 0, result = nil, got = 0, otherChan = 0, badName = 0 }
 
+-- One message to everybody in the lobby channel.
 local function SendChannel(msg)
     local id = ChanId()
     if not id then
@@ -932,6 +932,7 @@ end
 -- target: ask that player directly (they may not be in my group); otherwise
 -- the game's players are asked.
 function N:RequestSync(gid, target)
+    self:StartGameTicker() -- it repeats the request; after /reload nothing else starts it
     local now = GetTime()
     local want = self.syncWant
     if want and want.gid == gid and now - want.sent < 5 then return end
@@ -1201,8 +1202,22 @@ local WHISPER_COMMANDS = {
     ROLL = true, HOLD = true, SCORE = true, LEAVE = true,
     ALIVE = true, KICK = true, SYNCREQ = true, SYNC = true, SYNCP = true,
 }
--- The same message can come twice: over the group channel and as a whisper.
-local lastMessage = {}
+-- The same message can come up to three times: over the group channel, as a
+-- whisper and on the lobby channel. The copies can arrive interleaved with
+-- other messages, so the last few seconds of each sender are remembered.
+local recent = {} -- sender:lower() -> list of { text, channel, at }
+local function SecondCopy(key, text, channel)
+    local now, list, keep, dup = GetTime(), recent[key] or {}, {}, false
+    for _, m in ipairs(list) do
+        if now - m.at < 3 then
+            keep[#keep + 1] = m
+            if m.text == text and m.channel ~= channel then dup = true end
+        end
+    end
+    if not dup then keep[#keep + 1] = { text = text, channel = channel, at = now } end
+    recent[key] = keep
+    return dup
+end
 
 local function parts2name(text)
     return (text or ""):match("^[^|]*|([^|]*)|")
@@ -1245,16 +1260,14 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, cha
         Debug("dropped: whisper name mismatch (%s / %s)", tostring(sender), tostring(name))
         return
     end
-    if channel == "CHANNEL" then self.diag.got = self.diag.got + 1 end
     sender = self:Resolve(name) or name
     if Same(sender, N.Me()) then return end
+    if channel == "CHANNEL" then self.diag.got = self.diag.got + 1 end
     if whisper and not WHISPER_COMMANDS[parts[3]] then Debug("dropped: not a game command") return end
-    local key, last = sender:lower(), lastMessage[sender:lower()]
-    if last and last.text == text and last.channel ~= channel and GetTime() - last.at < 3 then
+    if SecondCopy(sender:lower(), text, channel) then
         Debug("dropped: second copy")
         return
     end
-    lastMessage[key] = { text = text, channel = channel, at = GetTime() }
     Seen(sender)
     table.remove(parts, 1)
     table.remove(parts, 1)

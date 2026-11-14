@@ -4,6 +4,8 @@
 
 - Lobby codes: the host's addon now recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender). In 1.0.7 messages on the channel could be thrown away, so joining with a code ended with "did not answer".
 - The lobby channel is now also hidden from the chat windows once the server has put you into it.
+- Messages that arrive twice (over the group and the lobby channel) are now always recognised as copies, even when other messages arrive in between. Before, dice could briefly jump back to an older roll.
+- After logging in again outside the group, the addon keeps asking for the running game instead of asking only once.
 - New command `/dna status`: shows what happened on the lobby channel (sent, received, thrown away). When joining with a code fails, this line is shown by itself – please send it along when reporting a problem.
 
 ## 1.0.7
