@@ -23,7 +23,7 @@
 --   SCORE|gid|turn|cat|dice      active : box chosen (receivers recompute points)
 --   LEAVE|gid                    any    : player left lobby / game
 --   HELLO                        host   : test message on a new lobby channel
-local ADDON, ns = ...
+local _, ns = ...
 local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
@@ -296,7 +296,7 @@ if ChatFrame_AddMessageEventFilter then
     end
 end
 
--- One message to the whole group (only the invitation and /dna ping use it).
+-- One message to the whole group (only the invitation uses it).
 function N:Broadcast(msg)
     local channel = self:GroupChannel()
     if not channel then return false end
@@ -1057,22 +1057,9 @@ function N:AskForRunningGame()
     if self.chan then self:RequestSync("*") end
 end
 
--- "/dna ping": every group member with the addon answers with its version.
-function N:Ping()
-    if not self:IsGrouped() then Print(L.notInGroup) return end
-    self.pingAt = GetTime()
-    Print(L.pingSent)
-    self:Broadcast("PING")
-end
-
-local function AddonVersion()
-    local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
-    return (get and get(ADDON, "Version")) or "?"
-end
-
 local GROUP_CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
--- The group channel only carries the invitation (and /dna ping).
-local GROUP_COMMANDS = { LOBBY = true, PING = true, PONG = true }
+-- The group channel only carries the invitation.
+local GROUP_COMMANDS = { LOBBY = true }
 
 local function parts2name(text)
     return (text or ""):match("^[^|]*|([^|]*)|")
@@ -1124,15 +1111,6 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, cha
     table.remove(parts, 1)
     table.remove(parts, 1)
     -- parts[1] is now the command
-    if parts[1] == "PING" then
-        self:Broadcast("PONG|" .. AddonVersion())
-        return
-    elseif parts[1] == "PONG" then
-        if self.pingAt and GetTime() - self.pingAt < 10 then
-            Print(L.pong:format(N.Short(sender), tostring(parts[2]), self.version))
-        end
-        return
-    end
     local handler = handlers[parts[1]]
     if not handler then return end
     handler(sender, unpack(parts, 2))

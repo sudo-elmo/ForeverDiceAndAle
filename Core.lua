@@ -79,10 +79,8 @@ SlashCmdList.FOREVERDICEANDALE = function(input)
         N:Join(gid)
         UI:Show("lobby")
     --@debug@
-    -- Test commands: only in the local copy. The packager comments this block
+    -- Test command: only in the local copy. The packager comments this block
     -- out for releases.
-    elseif cmd == "ping" then
-        N:Ping()
     elseif cmd == "debug" then
         N.debug = not N.debug
         ns.Print(N.debug and L.debugOn or L.debugOff)
