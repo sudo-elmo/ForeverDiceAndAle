@@ -151,7 +151,11 @@ local function Pump(seconds)
                         -- everybody else in that channel, group or not
                         if c ~= m.from and not dropChannels and env_InChannel(c, m.chan) then
                             local id = env_InChannel(c, m.chan)
-                            if chanStyle == "number" then
+                            if chanStyle == "spacerealm" then
+                                -- what Forever really sends: "Name Realm", with a space
+                                Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. " Elmodal",
+                                    id .. ". " .. m.chan, 0, id, m.chan)
+                            elseif chanStyle == "number" then
                                 Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM,
                                     tostring(id), 0, id, "")
                             elseif chanStyle == "nosender" then
@@ -665,7 +669,7 @@ do -- join with the code, nobody in a group, a whole game
     NoCheatMessages("channel code")
 end
 
-for _, style in ipairs({ "number", "nosender" }) do -- other clients describe the channel differently
+for _, style in ipairs({ "spacerealm", "number", "nosender" }) do -- other clients describe the channel differently
     chanStyle = style
     SetupClients({ "Anna", "Bert" })
     local a, b = clients[1], clients[2]

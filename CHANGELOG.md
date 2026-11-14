@@ -3,7 +3,8 @@
 ## 1.0.8
 
 - Multiplayer now runs only over the lobby's hidden chat channel, however you joined – with the group invitation or with the lobby code. Hidden addon whispers are no longer used, and the group only carries the invitation. So the group can be left at any time, and everybody plays the same way.
-- The host's addon recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender). In 1.0.7 messages on the channel could be thrown away, so joining with a code ended with "did not answer".
+- Fixed the reason why joining with a code ended with "did not answer" in 1.0.7: on chat channels the game names the sender as "Name Realm" (with a space instead of a hyphen). The addon took that for a fake sender and threw every channel message away.
+- The host's addon also recognises its lobby channel however the game client describes it (only the channel number, the name in other spelling, no sender).
 - The lobby channel is now also hidden from the chat windows once the server has put you into it.
 - After a `/reload` or logging in again, the addon keeps asking in the lobby channel for the running game instead of asking only once.
 - Invitations disappear by themselves when the host stops repeating them (lobby closed or game started).

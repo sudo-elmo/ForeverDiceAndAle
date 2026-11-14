@@ -44,9 +44,11 @@ local RegisterPrefix = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or
 -- (UnitName, UnitFullName, the addon message sender), which made players fail
 -- to recognise each other.
 
+-- "Anna", "Anna-Realm", "Anna Realm" (chat channels on Forever), " Anna " -> "Anna".
+-- Character names never contain spaces or hyphens.
 function N.Normalize(name)
-    if type(name) ~= "string" or name == "" then return nil end
-    name = name:gsub("%s+", ""):match("^[^-]+")
+    if type(name) ~= "string" then return nil end
+    name = name:match("^%s*([^%s%-]+)")
     if not name or name == "" then return nil end
     return name
 end
