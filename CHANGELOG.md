@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.7
+
+- Lobby codes and playing on without a group work again on servers that drop hidden addon whispers (like Forever). Every lobby now gets a hidden chat channel. Everyone in the lobby joins it automatically, and players outside the group get lobby and game messages there. The channel does not show up in your chat.
+- After a `/reload` outside the group, the game comes back over that channel.
+- If the server does not allow addon messages in chat channels either, the addon notices it, hides the lobby code and tells you to play in a group.
+- A wrong lobby code no longer throws out other players who are joining the same lobby.
+- Everyone needs 1.0.7 – it does not play together with older versions.
+
 ## 1.0.6
 
 - Joining with a lobby code no longer shows you in the lobby before the host has let you in. Until then the lobby says "Connecting to …". If the host does not answer, you get a message that explains what to try (check the code, or join through a group).

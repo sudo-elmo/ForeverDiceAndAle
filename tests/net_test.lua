@@ -56,6 +56,14 @@ local function NewClient(name, style)
         RegisterAddonMessagePrefix = function(p) c.prefix = p return true end,
         SendAddonMessage = function(prefix, text, channel, target)
             if c.gone or c.dead then return 0 end
+            if channel == "CHANNEL" then
+                if c.noChannel then return 4 end
+                local chan = c.chanList[(tonumber(target) or 0) - 4]
+                if not chan then return 7 end
+                wire[#wire + 1] = { prefix = prefix, text = text, channel = channel, target = target, chan = chan, from = c }
+                c.sent.CHANNEL = (c.sent.CHANNEL or 0) + 1
+                return 0
+            end
             if channel ~= "WHISPER" and not c.grouped then return 0 end
             if c.dropNext and text:find(c.dropNext, 1, true) then c.dropNext = nil return 0 end
             wire[#wire + 1] = { prefix = prefix, text = text, channel = channel, target = target, from = c }
@@ -78,6 +86,18 @@ local function NewClient(name, style)
             return t
         end,
     }
+    c.chanList = {}
+    env.JoinTemporaryChannel = function(name)
+        for _, n in ipairs(c.chanList) do if n:lower() == name:lower() then return end end
+        c.chanList[#c.chanList + 1] = name
+    end
+    env.GetChannelName = function(name)
+        for i, n in ipairs(c.chanList) do if n:lower() == name:lower() then return i + 4, n end end
+        return 0
+    end
+    env.LeaveChannelByName = function(name)
+        for i, n in ipairs(c.chanList) do if n:lower() == name:lower() then table.remove(c.chanList, i) return end end
+    end
     env.StaticPopupDialogs = {}
     env.StaticPopup_Show = function(_, _, _, gid) c.popup = gid end
     env.CreateFrame = function()
@@ -109,6 +129,11 @@ local function Fire(c, event, ...)
     end
 end
 
+local dropChannels = false -- the server silently drops channel addon messages
+function env_InChannel(c, name)
+    for i, n in ipairs(c.chanList) do if n:lower() == name:lower() then return i + 4 end end
+end
+
 local function Pump(seconds)
     local target = now + (seconds or 0)
     repeat
@@ -116,7 +141,14 @@ local function Pump(seconds)
             local m = table.remove(wire, 1)
             for _, c in ipairs(clients) do
                 if not c.dead and not c.gone and c.prefix == m.prefix then
-                    if m.channel == "WHISPER" then
+                    if m.channel == "CHANNEL" then
+                        -- everybody else in that channel, group or not
+                        if c ~= m.from and not dropChannels and env_InChannel(c, m.chan) then
+                            local id = env_InChannel(c, m.chan)
+                            Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM,
+                                id .. ". " .. m.chan, 0, id, m.chan)
+                        end
+                    elseif m.channel == "WHISPER" then
                         -- whispers reach the named player, group or not
                         if m.target:lower() == c.name:lower() and not c.noWhisper and not m.from.noWhisper then
                             Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM)
@@ -597,40 +629,132 @@ do -- whispers get through: no warning
     for _, c in ipairs(clients) do
         eq(Printed(c, "do not get through"), false, "probe ok: no warning for " .. c.name)
         for _, o in ipairs(clients) do
-            if o ~= c then eq(c.ns.Net.whisperOK[o.name:lower()], true, "probe ok: " .. c.name .. " -> " .. o.name) end
+            if o ~= c then eq(c.ns.Net.reachOK[o.name:lower()], true, "probe ok: " .. c.name .. " -> " .. o.name) end
         end
     end
 end
 
-do -- whispers are blocked: warned in the group, and again after leaving it
+local function NoWhispers() for _, c in ipairs(clients) do c.noWhisper = true end end
+
+do -- Forever: whispers are dropped, the lobby channel carries everything
     SetupClients({ "Anna", "Bert" }, { true, true })
+    NoWhispers()
     local a, b = clients[1], clients[2]
-    a.noWhisper, b.noWhisper = true, true
     a.ns.Net:Host()
     Pump()
     b.ns.Net:Join(b.popup)
     Pump(15)
-    eq(Printed(a, "Addon whispers to Bert do not get through"), true, "probe blocked: Anna warned")
-    eq(Printed(b, "Addon whispers to Anna do not get through"), true, "probe blocked: Bert warned")
+    eq(Printed(a, "cannot reach"), false, "channel: Anna not warned")
+    eq(Printed(b, "cannot reach"), false, "channel: Bert not warned")
+    eq(a.ns.Net.reachOK.bert, true, "channel: Anna reaches Bert")
+    eq(b.ns.Net.chan and b.ns.Net.chan.name, a.ns.Net.chan.name, "channel: Bert in Anna's channel")
+    a.ns.Net:StartGame()
+    Pump(1)
+    PlayUntil(function() return a.ns.Game.state.turn >= 4 end)
+    Ungroup(clients)
+    Pump(90)
+    eq(a.ns.Game.state.players[2].left, nil, "channel: Bert not skipped without group")
+    eq(PlayUntil(AllFinished), true, "channel: game ends without group")
+    SameResults("channel", clients)
+    NoCheatMessages("channel")
+    Pump(70)
+    eq(a.ns.Net.chan, nil, "channel: Anna left the channel after the game")
+    eq(#b.chanList, 0, "channel: Bert left the channel after the game")
+end
+
+do -- Forever: join with the code, nobody in a group, a whole game
+    SetupClients({ "Anna", "Bert", "Cleo" })
+    NoWhispers()
+    local a = clients[1]
+    a.ns.Net:Host()
+    Pump(5)
+    clients[2].ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    clients[3].ns.Net:JoinByCode(a.ns.Net.lobby.code:lower():gsub("-", " "))
+    Pump(10)
+    eq(#a.ns.Net.lobby.members, 3, "channel code: lobby complete")
+    eq(clients[3].ns.Net.lobby.confirmed, true, "channel code: Cleo confirmed")
+    a.ns.Net:StartGame()
+    Pump(1)
+    eq(PlayUntil(AllFinished), true, "channel code: game ends")
+    SameResults("channel code", clients)
+    NoCheatMessages("channel code")
+end
+
+do -- Forever: wrong PIN only bothers the one who typed it
+    SetupClients({ "Anna", "Bert", "Cleo" })
+    NoWhispers()
+    local a, b, c = clients[1], clients[2], clients[3]
+    a.ns.Net:Host()
+    Pump(5)
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(5)
+    local wrong = a.ns.Net.lobby.pin == "0000" and "Anna-1111" or "Anna-0000"
+    c.ns.Net:JoinByCode(wrong)
+    Pump(10)
+    eq(#a.ns.Net.lobby.members, 2, "badpin: Cleo not in")
+    eq(b.ns.Net.lobby ~= nil, true, "badpin: Bert still in the lobby")
+end
+
+do -- /reload outside the group: the game comes back over the channel
+    SetupClients({ "Anna", "Bert" })
+    NoWhispers()
+    local a = clients[1]
+    a.ns.Net:Host()
+    Pump(5)
+    clients[2].ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(5)
+    a.ns.Net:StartGame()
+    Pump(1)
+    PlayUntil(function() return a.ns.Game.state.turn >= 4 end)
+    local turn = a.ns.Game.state.turn
+    local old = clients[2]
+    old.gone = true
+    local nc = NewClient(old.name, old.style)
+    nc.grouped, nc.noWhisper = false, true
+    nc.chanList = old.chanList -- still in the channel after /reload
+    nc.ns.db = { channel = old.ns.db and old.ns.db.channel or old.ns.Net.chan.name }
+    clients[2] = nc
+    Fire(nc, "PLAYER_LOGIN")
+    Pump(20)
+    eq(nc.ns.Game.state and nc.ns.Game.state.turn, turn, "channel reload: Bert has the game back")
+    eq(PlayUntil(AllFinished), true, "channel reload: game ends")
+end
+
+do -- channel addon messages refused: warned in the group, codes hidden
+    SetupClients({ "Anna", "Bert" }, { true, true })
+    NoWhispers()
+    for _, c in ipairs(clients) do c.noChannel = true end
+    local a, b = clients[1], clients[2]
+    a.ns.Net:Host()
+    Pump()
+    b.ns.Net:Join(b.popup)
+    Pump(15)
+    eq(Printed(a, "cannot reach Bert"), true, "refused: Anna warned")
+    eq(Printed(b, "cannot reach Anna"), true, "refused: Bert warned")
+    eq(a.ns.Net.lobby.code, nil, "refused: no lobby code shown")
+    eq(Printed(a, "lobby codes do not work"), true, "refused: Anna told why")
     a.ns.Net:StartGame()
     Pump(1)
     Ungroup({ b })
     Pump(1)
-    eq(Printed(b, "cannot reach Anna"), true, "probe blocked: Bert told after leaving the group")
+    eq(Printed(b, "Invite each other to a group again"), true, "refused: Bert told after leaving the group")
 end
 
-do -- lobby code with blocked whispers: not shown as joined, clear message
+do -- channel messages silently dropped: code join gives up with a hint
     SetupClients({ "Anna", "Bert" }, { false, false })
+    NoWhispers()
+    dropChannels = true
     local a, b = clients[1], clients[2]
-    a.noWhisper = true
     a.ns.Net:Host()
     Pump()
     b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
     Pump(10)
-    eq(b.ns.Net.lobby and b.ns.Net.lobby.confirmed, nil, "code blocked: Bert not confirmed")
+    eq(b.ns.Net.lobby and b.ns.Net.lobby.confirmed, nil, "dropped: Bert not confirmed")
     Pump(30)
-    eq(b.ns.Net.lobby, nil, "code blocked: Bert gives up")
-    eq(Printed(b, "Anna did not answer"), true, "code blocked: Bert gets the hint")
+    eq(b.ns.Net.lobby, nil, "dropped: Bert gives up")
+    eq(Printed(b, "Anna did not answer"), true, "dropped: Bert gets the hint")
+    eq(b.ns.Net.chan, nil, "dropped: Bert left the channel")
+    dropChannels = false
 end
 
 if fails > 0 then print(fails .. " FAILURES") os.exit(1) end

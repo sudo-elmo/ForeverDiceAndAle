@@ -54,7 +54,7 @@ Everyone needs the addon. There are two ways to get into a game:
 
 Both ways work at the same time: group members see the lobby by themselves, everyone else uses the code. Lobby codes only work between players on the same realm and faction.
 
-Once the game is running, nobody has to stay in the group – as long as hidden addon whispers get through between you. In a group the addon checks this by itself; if they do not, it tells you to stay in the group (and joining with a code will not work for you either). If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
+Once the game is running, nobody has to stay in the group – as long as the server lets the addon's messages through outside the group. In a group the addon checks this by itself; if they do not get through, it tells you to stay in the group. If someone leaves the game, the others keep playing. Players who disconnect, `/reload` or lose track of the game get it back automatically from the others. Anyone who is gone for more than a minute is skipped, and joins in again as soon as they are back.
 
 ## Settings
 
@@ -89,9 +89,9 @@ You can also open the window from the addon compartment menu (the button next to
 
 ## How multiplayer works
 
-There is no extra server. The addon sends small hidden addon messages: over your party or raid channel, and as hidden addon whispers to players who are not in your group. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
+There is no extra server. The addon sends small hidden addon messages: over your party or raid channel, and – for players who are not in your group – in a hidden chat channel that every lobby gets (plus hidden addon whispers where the server lets them through). The channel does not show up in your chat. Every player's addon keeps its own copy of the game and applies the same rules, so all score sheets stay the same.
 
-A lobby code is the host's name plus a four-digit PIN. Joining with a code sends the PIN to the host as a hidden whisper, and the host only lets you in if it matches. Whispers only reach players on your own realm and faction.
+A lobby code is the host's name plus a four-digit PIN. Joining with a code puts you into the lobby's hidden channel and sends the PIN to the host, who only lets you in if it matches. This only reaches players on your own realm and faction. If the server does not allow addon messages in chat channels, the addon notices it, hides the lobby code and tells you to play in a group instead.
 
 The active player rolls on their own computer. The other clients only accept moves from the player whose turn it is, and they work out the points themselves instead of trusting a number that was sent. That is fine for friendly games, but it is not built to stop someone who modifies the addon to cheat.
 
