@@ -2,29 +2,13 @@
 
 ## 1.1.0
 
-Multiplayer has been rebuilt so that lobby codes and playing without a group really work on Forever.
-
-**Multiplayer over a lobby channel**
-
-- Every lobby now has its own hidden chat channel, and all lobby and game messages go through it – whether you joined with the group invitation or with a lobby code. The group only carries the invitation. In 1.0.5 these messages went as hidden addon whispers, which Forever does not deliver, so joining with a code and playing on after leaving the group did not work.
-- The group can be left at any time, before or during the game, and everybody keeps playing.
-- The channel does not show up in your chat windows, and its join and leave notices are hidden. The addon leaves it a minute after the game ends, or right away when you close the game.
-- After a `/reload` or logging in again, the running game is fetched over the channel, in a group or not.
-- Invitations disappear by themselves once the lobby is closed or the game has started.
-- If a server does not allow addon messages in chat channels, the addon says so instead of showing a lobby that never fills.
-
-**Joining**
-
-- When you join, the lobby says "Connecting to …" until the host has let you in. Before, you saw yourself in the lobby although the host never got your request.
-- If the host does not answer (for example because of a wrong code), you get a message after about half a minute that says what to check.
-- New command `/dna status`: shows what happened on the lobby channel (messages sent, received and thrown away). When joining fails, this line is shown by itself – please send it along when you report a problem.
-
-**Fixes**
-
-- After a lobby ended, its player names stayed in the Multiplayer window on top of "Join with a lobby code".
-- The Multiplayer and results windows are no longer see-through, so the score sheet behind them does not shine through.
-
-Everyone needs 1.1.0 – it does not play together with 1.0.x.
+- Lobby codes and playing without a group now work on Forever: each lobby gets its own hidden chat channel for all multiplayer messages.
+- You can leave the group at any time, even mid-game.
+- After `/reload` or relogging, a running game comes back by itself.
+- Joining shows "Connecting to …" until the host lets you in, and tells you what to check if nobody answers.
+- New command `/dna status` to help with multiplayer problems.
+- Fixed old player names showing in the Multiplayer window, and windows being see-through.
+- Everyone needs 1.1.0.
 
 ## 1.0.5
 
