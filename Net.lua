@@ -311,10 +311,7 @@ end
 -- One message to the whole group (only the invitation and /dna ping use it).
 function N:Broadcast(msg)
     local channel = self:GroupChannel()
-    if not channel then
-        Debug("not sent (no group channel): %s", msg)
-        return false
-    end
+    if not channel then return false end
     return Send(msg, channel)
 end
 
@@ -341,7 +338,8 @@ end
 
 function N:Announce()
     local lb = self.lobby
-    if lb and lb.isHost then
+    -- outside a group there is nobody to invite: the code is the way in
+    if lb and lb.isHost and self:IsGrouped() then
         self:Broadcast("LOBBY|" .. lb.gid .. "|" .. lb.chan)
     end
 end
