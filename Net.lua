@@ -1119,6 +1119,8 @@ function N:OnAddonMessage(prefix, text, channel, sender, target, _, localID, cha
         end
         return
     end
+    -- My own messages come back on the channel: ignore them before any check.
+    if Same(name, N.Me()) then return end
     -- On the channel anybody can write: WoW's sender name is the real sender,
     -- the name written in the message has to match it.
     if onChannel and not Same(N.Normalize(sender), name) then
