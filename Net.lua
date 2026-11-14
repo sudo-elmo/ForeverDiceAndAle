@@ -20,12 +20,14 @@
 --   LEAVE|gid                    any    : player left lobby / game
 --   CODEJOIN|pin                 player : wants to join the host's lobby with a code (whisper)
 --   BADCODE                      host   : wrong code or no open lobby (whisper)
+--   WPROBE                       any    : whisper check (whisper)
+--   WPROBEOK|name                any    : "your whisper got through" (group channel)
 local ADDON, ns = ...
 local L, R, G = ns.L, ns.Rules, ns.Game
 
 local N = {
     prefix = "FDiceAle",
-    version = "5",
+    version = "6",
     maxPlayers = 6,
     lobby = nil,   -- { gid, host, isHost, members = { names } }
     invites = {},  -- gid -> { host, time }
@@ -247,6 +249,60 @@ local function GamePlayerNames()
     return t
 end
 
+-- ---------------------------------------------------------------- whisper check
+-- Addon whispers carry lobby codes and keep a game going outside the group.
+-- While in a group, every client whispers a probe to the other players, who
+-- confirm it over the group channel. If the confirmation does not come, the
+-- player is told to stay in the group instead of losing the game later.
+
+N.whisperOK = {} -- name:lower() -> true (gets through) | false (does not)
+local probing = {}
+local PROBE_RETRY, PROBE_WAIT = 4, 10
+
+function N:Probe(names)
+    if not self:IsGrouped() or not (C_Timer and C_Timer.After) then return end
+    for _, name in ipairs(names or {}) do
+        local key = name:lower()
+        if not Same(name, N.Me()) and N.whisperOK[key] == nil and not probing[key] and self:Resolve(name) then
+            probing[key] = true
+            local function probe()
+                if N.whisperOK[key] ~= nil then return end
+                N.whispered[key] = GetTime()
+                Send("WPROBE", "WHISPER", name)
+            end
+            probe()
+            C_Timer.After(PROBE_RETRY, probe) -- one retry: a loading screen can swallow the first
+            C_Timer.After(PROBE_WAIT, function()
+                probing[key] = nil
+                if N.whisperOK[key] == nil and N:Resolve(name) and N:IsOnline(name) then
+                    N.whisperOK[key] = false
+                    Print(L.whisperBlocked:format(N.Short(name)))
+                    Changed()
+                end
+            end)
+        end
+    end
+end
+
+-- Outside the group: tell once about players the addon cannot reach.
+function N:WarnUnreachable()
+    local names = {}
+    local s = G.state
+    if s and s.mode == "net" and not s.finished then
+        for _, p in ipairs(s.players) do
+            if not p.left and self.whisperOK[p.name:lower()] == false then names[#names + 1] = N.Short(p.name) end
+        end
+    elseif self.lobby then
+        for _, n in ipairs(self.lobby.members) do
+            if self.whisperOK[n:lower()] == false then names[#names + 1] = N.Short(n) end
+        end
+    end
+    if #names > 0 and not self.warnedLost then
+        self.warnedLost = true
+        Print(L.whisperLost:format(table.concat(names, ", ")))
+    end
+end
+
 local function NewGameId()
     return string.format("%x%03x", (time() % 1048576), math.random(0, 4095))
 end
@@ -277,7 +333,11 @@ local function Tick()
         lb.tries = (lb.tries or 0) + 1
         if lb.tries > 6 then
             N.lobby = nil
-            Print(L.joinNoAnswer)
+            if lb.byCode then
+                Print(L.joinNoAnswerCode:format(N.Short(lb.host)))
+            else
+                Print(L.joinNoAnswer)
+            end
             Changed()
             return
         end
@@ -488,6 +548,7 @@ local function AddMember(lb, sender)
     lb.members[#lb.members + 1] = sender
     Print(L.playerJoined:format(N.Short(sender)))
     N:BroadcastLobby()
+    N:Probe(lb.members)
     Changed()
 end
 
@@ -550,6 +611,7 @@ function handlers.LOBBYLIST(sender, gid, names)
         for _, n in ipairs(lb.members) do if Same(n, N.Me()) then stillIn = true end end
         if stillIn then
             lb.confirmed = true
+            N:Probe(lb.members)
         elseif lb.confirmed then
             N.lobby = nil -- the host removed me
         end
@@ -604,6 +666,18 @@ function handlers.LEAVE(sender, gid)
                 G:RemovePlayer(p.name, true)
             end
         end
+    end
+end
+
+function handlers.WPROBE(sender)
+    -- answered on the group channel: only the whisper is being tested
+    if N:IsGrouped() and N:Resolve(sender) then N:Broadcast("WPROBEOK|" .. sender) end
+end
+
+function handlers.WPROBEOK(sender, target)
+    if Same(target, N.Me()) then
+        Debug("whispers to %s get through", sender)
+        N.whisperOK[sender:lower()] = true
     end
 end
 
@@ -909,6 +983,7 @@ G:On(function(event)
         for _, p in ipairs(s.players) do Seen(p.name) end
         lastAlive = 0
         N:StartGameTicker()
+        N:Probe(GamePlayerNames())
     end
 end)
 
@@ -933,7 +1008,7 @@ end
 local GROUP_CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 -- Commands that may come as a whisper: those of a running game.
 local WHISPER_COMMANDS = {
-    CODEJOIN = true, BADCODE = true, LOBBYLIST = true, FULL = true, CLOSE = true, START = true,
+    CODEJOIN = true, BADCODE = true, WPROBE = true, LOBBYLIST = true, FULL = true, CLOSE = true, START = true,
     ROLL = true, HOLD = true, SCORE = true, LEAVE = true,
     ALIVE = true, KICK = true, SYNCREQ = true, SYNC = true, SYNCP = true,
 }
@@ -998,9 +1073,12 @@ function N:CheckRoster()
     -- Not in a group (any more): lobby and game go on as whispers.
     if not self:IsGrouped() then
         wipe(self.invites)
+        self:WarnUnreachable()
         Changed()
         return
     end
+
+    self.warnedLost = nil
 
     -- Drop invitations from hosts that are gone.
     for gid, inv in pairs(self.invites) do

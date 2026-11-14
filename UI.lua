@@ -634,8 +634,10 @@ function UI:RefreshLobby()
     p.noInv:SetShown(not inLobby and #invList == 0)
 
     p.lobbyTitle:SetShown(inLobby)
+    -- Joining: nobody is "in" until the host's member list confirms it.
+    local pending = inLobby and not lb.isHost and not lb.confirmed
     for i, m in ipairs(p.members) do
-        local name = inLobby and lb.members[i]
+        local name = inLobby and not pending and lb.members[i]
         m:SetShown(name ~= nil)
         if name then m:SetText(i .. ". " .. ShortName(name)) end
     end
@@ -653,7 +655,7 @@ function UI:RefreshLobby()
     p.waiting:SetShown(inLobby and not isHost)
     if inLobby then
         p.lobbyTitle:SetText(L.lobbyOf:format(ShortName(lb.host)))
-        p.waiting:SetText(L.waitingHost:format(ShortName(lb.host)))
+        p.waiting:SetText((pending and L.connecting or L.waitingHost):format(ShortName(lb.host)))
         p.startBtn:SetEnabled(isHost and #lb.members >= 2)
     end
 end

@@ -118,7 +118,7 @@ local function Pump(seconds)
                 if not c.dead and not c.gone and c.prefix == m.prefix then
                     if m.channel == "WHISPER" then
                         -- whispers reach the named player, group or not
-                        if m.target:lower() == c.name:lower() then
+                        if m.target:lower() == c.name:lower() and not c.noWhisper and not m.from.noWhisper then
                             Fire(c, "CHAT_MSG_ADDON", m.prefix, m.text, m.channel, m.from.name .. "-" .. REALM)
                         end
                     elseif c.grouped then
@@ -584,6 +584,53 @@ do -- group member in the lobby leaves the group: stays in the lobby
     a.ns.Net:StartGame()
     Pump(1)
     eq(b.ns.Game.state and b.ns.Game.state.mode, "net", "lobbyungroup: Bert gets the start")
+end
+
+local function Printed(c, text)
+    for _, m in ipairs(c.printed) do if m:find(text, 1, true) then return true end end
+    return false
+end
+
+do -- whispers get through: no warning
+    Setup({ "Anna", "Bert", "Cleo" }, "full")
+    Pump(15)
+    for _, c in ipairs(clients) do
+        eq(Printed(c, "do not get through"), false, "probe ok: no warning for " .. c.name)
+        for _, o in ipairs(clients) do
+            if o ~= c then eq(c.ns.Net.whisperOK[o.name:lower()], true, "probe ok: " .. c.name .. " -> " .. o.name) end
+        end
+    end
+end
+
+do -- whispers are blocked: warned in the group, and again after leaving it
+    SetupClients({ "Anna", "Bert" }, { true, true })
+    local a, b = clients[1], clients[2]
+    a.noWhisper, b.noWhisper = true, true
+    a.ns.Net:Host()
+    Pump()
+    b.ns.Net:Join(b.popup)
+    Pump(15)
+    eq(Printed(a, "Addon whispers to Bert do not get through"), true, "probe blocked: Anna warned")
+    eq(Printed(b, "Addon whispers to Anna do not get through"), true, "probe blocked: Bert warned")
+    a.ns.Net:StartGame()
+    Pump(1)
+    Ungroup({ b })
+    Pump(1)
+    eq(Printed(b, "cannot reach Anna"), true, "probe blocked: Bert told after leaving the group")
+end
+
+do -- lobby code with blocked whispers: not shown as joined, clear message
+    SetupClients({ "Anna", "Bert" }, { false, false })
+    local a, b = clients[1], clients[2]
+    a.noWhisper = true
+    a.ns.Net:Host()
+    Pump()
+    b.ns.Net:JoinByCode(a.ns.Net.lobby.code)
+    Pump(10)
+    eq(b.ns.Net.lobby and b.ns.Net.lobby.confirmed, nil, "code blocked: Bert not confirmed")
+    Pump(30)
+    eq(b.ns.Net.lobby, nil, "code blocked: Bert gives up")
+    eq(Printed(b, "Anna did not answer"), true, "code blocked: Bert gets the hint")
 end
 
 if fails > 0 then print(fails .. " FAILURES") os.exit(1) end
